@@ -1,0 +1,872 @@
+amule (2.2.6+debian0-7) unstable; urgency=low
+
+  * [3e1a262] Merge from Ubuntu: New amule-gnome-support package.
+    (Closes: #313579)
+
+ -- Giuseppe Iuculano <iuculano@debian.org>  Fri, 22 Jan 2010 18:10:32 +0100
+
+amule (2.2.6+debian0-6) unstable; urgency=low
+
+  * [404dea9] Disabled also SYS_fallocate in hppa
+
+ -- Giuseppe Iuculano <iuculano@debian.org>  Thu, 07 Jan 2010 09:32:33 +0100
+
+amule (2.2.6+debian0-5) unstable; urgency=low
+
+  * [06240cb] Really disable fallocate only on alpha and hppa
+
+ -- Giuseppe Iuculano <iuculano@debian.org>  Wed, 06 Jan 2010 09:45:44 +0100
+
+amule (2.2.6+debian0-4) unstable; urgency=low
+
+  * [ee905f0] Disable fallocate only on alpha and hppa, amd64 and ia64
+    need it
+
+ -- Giuseppe Iuculano <iuculano@debian.org>  Tue, 05 Jan 2010 12:44:58 +0100
+
+amule (2.2.6+debian0-3) unstable; urgency=low
+
+  * [6220bf6] Updated VCS control fields
+  * [6d07590] Disable fallocate and fix FTBFS on alpha and hppa
+    (Closes: #562992)
+
+ -- Giuseppe Iuculano <iuculano@debian.org>  Tue, 05 Jan 2010 08:46:46 +0100
+
+amule (2.2.6+debian0-2) unstable; urgency=low
+
+  * [996f825] Fixed preinst scripts exit code.
+
+ -- Giuseppe Iuculano <iuculano@debian.org>  Tue, 29 Dec 2009 18:47:34 +0100
+
+amule (2.2.6+debian0-1) unstable; urgency=low
+
+  [ Adeodato Simó ]
+  * [2939566] Make amule and amule-daemon Recommend: unzip. (Closes: #530249)
+
+  [ Cristian Greco ]
+  * [b83afce] debian/control: update Vcs-* fields.
+
+  [ Adrián Yanes ]
+  * [4257b3b] Update Co-Maintainers and Authors
+    - Thanks to Adeodato Simó for the prior work on amule (Closes: #548352)
+
+  [ Cristian Greco ]
+  * [09c1e6d] debian/control: set list as maintainer, project members as
+    uploaders.
+
+  [ Giuseppe Iuculano ]
+  * [aa9a541] Imported Upstream version 2.2.6+debian0 (Closes: #547293)
+  * [1c01c81] Added Giuseppe Iuculano in Uploaders
+  * [91c0944] Replace libreadline5-dev build dependency with
+    libreadline-dev (Closes: #553716)
+  * [5b8227f] Fixed a typo in alc man page (Closes: #525264) - thanks to
+    A. Costa
+  * [0ca373f] Refreshed patches
+  * [57dd562] Fixed a typo in ed2k man page (Closes: #525265) - thanks
+    to A. Costa
+  * [9c06762] debian/rules: Removed deprecated dh_desktop
+  * [1659d98] Bump to debhelper 7 compatibility levels
+  * [150d9ee] Updated to standards version 3.8.3
+  * [77d2a5c] debian/control: Removed XS-X-Collab-Maint field
+  * [4e7c2e3] Updated watch file
+  * [89d9555] Do not ignore preinst errors
+
+ -- Giuseppe Iuculano <iuculano@debian.org>  Tue, 29 Dec 2009 09:20:46 +0100
+
+amule (2.2.5-2) UNRELEASED; urgency=low
+
+  * Make amule and amule-daemon Recommend: unzip, which is used to extract IP
+    filters in ZIP format. Thanks, Luís Picciochi Oliveira. (Closes: #530249)
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sat, 23 May 2009 13:26:44 +0200
+
+amule (2.2.5-1) unstable; urgency=low
+
+  +++ The "Fido, Your Leash Is Too Long" release.
+
+  * New upstream release. (Thanks, DEHS.)
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sat, 23 May 2009 10:45:57 +0200
+
+amule (2.2.4-1) unstable; urgency=low
+
+  +++ "The Book of Love" release.
+
+  * New upstream release.
+
+  * Bump Standards-Version to 3.8.1 (no changes needed).
+
+  * Drop version constraint in debhelper build-dependency, since the required
+    version is in stable now.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Thu, 09 Apr 2009 15:11:18 +0200
+
+amule (2.2.3-2) unstable; urgency=low
+
+  * The "I Think I Need a New Heart" release.
+
+  * Upload to unstable.
+  * Use xdg-open as default preview program instead of mplayer.
+    (Closes: #418273)
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sun, 01 Mar 2009 14:16:29 +0100
+
+amule (2.2.3-1) experimental; urgency=low
+
+  * "The Cactus Where Your Heart Should Be" release.
+
+  * New upstream release. (Closes: #510257)
+    + drop manpages_spelling_fixes.diff, merged upstream.
+
+  * Bump debian/compat to 5.
+  * Change section of packages to net (from x11, heh).
+  * Add a paragraph to amule-daemon/README.Debian about its init script.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sat, 03 Jan 2009 13:00:48 +0100
+
+amule (2.2.2-2) experimental; urgency=low
+
+  * The "The Luckiest Guy on the Lower East Side" release.
+
+  * Build-Depend on libupnp3-dev: configure now detects its presence at build
+    time and links against it, instead of the program dlope'ing it at run time.
+    (Thanks Sven Hartge for the heads-up, closes: #509218).
+
+  * Make amule Replace: old versions of amule-common as found in Ubuntu
+    (they used to ship the skins in amule-common for some time).
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sat, 20 Dec 2008 21:19:45 +0100
+
+amule (2.2.2-1) experimental; urgency=low
+
+  * The "Come Back from San Francisco" release.
+
+  [ Sandro Tosi ]
+  * New upstream release
+  * debian/control
+    - bump Standards-Version to 3.8.0
+      + debian/README.source added
+    - added version to build-dep on debhelper due to use of dh_icons
+  * debian/patches/manpages_spelling_fixes.diff
+    - added to fix some spelling errors and add missing options
+  * debian/watch
+    - treat release candidate version less than the real release
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sat, 16 Aug 2008 14:06:10 +0100
+
+amule (2.2.1-1) unstable; urgency=low
+
+  * The "I Don't Want to Get Over You" release.
+
+  * New upstream release. (Closes: #486372)
+  * Add calls to dh_icons and dh_desktop in debian/rules.
+  * Pass --with-denoise-level=0 to configure, so that the full g++ invocations
+    are printed, and not just "Compiling foo". Thanks, Werner Mahr.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Mon, 30 Jun 2008 19:17:20 +0200
+
+amule (2.2.0~20080608-1) experimental; urgency=low
+
+  * The "Reno Dakota" release.
+
+  * New upstream snapshot:
+    + fixes FTBFS with gcc-4.3. (Closes: #474592)
+    + update patch configure_ignore_gdlib-config_garbage.diff.
+
+  * Depend on libupnp3 instead of libupnp2. (Closes: #483935)
+
+  * Make the init script export $LANG from /etc/default/locale if not already
+    set. Amule 2.2 no longer assumes a Latin-1 charset, and refuses to handle
+    files with non-ASCII characters if the running locale does not support
+    them. (Closes: #475187, #475843)
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sun, 08 Jun 2008 16:45:50 +0200
+
+amule (2.2.0~20080309-2) experimental; urgency=low
+
+  * The "A Chicken With Its Head Cut Off" release.
+
+  * Enable uPnP support:
+
+    + pass --enable-upnp to configure.
+
+    + add a hard-coded dependency on libupnp2 to amule and amule-daemon, since
+      the library is dlopen'ed.
+
+    + no build-dependency on libupnp-dev necessary, upstream ships the two
+      needed header files under external/upnp.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sat, 05 Apr 2008 18:51:05 +0200
+
+amule (2.1.3-6) unstable; urgency=medium
+
+  * The "All My Little Words" release.
+
+  * Fix FTBFS with GCC 4.3, thanks to Maximiliano Curia for sending a patch.
+    (Closes: #417104)
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sat, 05 Apr 2008 16:30:34 +0200
+
+amule (2.2.0~20080309-1) experimental; urgency=low
+
+  * The "I Don't Believe in the Sun" release.
+
+  * Upload a snapshot of the upcoming 2.2.0 release to experimental.
+
+    + Upstream SVN repository doesn't seem to be public, note in
+      debian/copyright the URL this tarball was obtained from.
+
+    + Such tarballs ships a debian/ subdirectory, repack and rename it to
+      debian.upstream.
+
+    + In this version the crashes related to closing a search tab have
+      disappeared. (Closes: #419613, #430708, #464690)
+
+    + Patch by Bas Zoetekouw to avoid deleting the entropy pool also applied.
+      (Closes: #350396)
+
+  * Packaging changes needed (several come from the Ubuntu package, many
+    thanks to Emilio Pozuelo Monfort for his excellent work):
+
+    + build-depend on WxWidgets 2.8 instead of 2.6.
+    + add build-dependency on libgeoip-dev for GeoIP support, and pass
+      --enable-geoip to configure.
+
+    + install files from /usr/share/amule/skins.
+    + drop our debian/amulegui.desktop and debian/mans/amulegui.1, upstream
+      includes versions of these.
+    + stop shipping a copy of amule.xpm as amulegui.xpm in the packages, now
+      that upstream ships a amulegui.xpm themselves.
+
+  * Patches:
+
+    + drop superseded/applied upstream:
+      - for_upstream-manpage_typos.diff
+      - configure_proper_libpng_detection.diff
+
+    + update:
+      - configure_ignore_gdlib-config_garbage.diff
+
+    + cas_configfile.c_good_default_paths.diff:
+      - refresh, and use DejaVuSerif instead of Vera, which is going to be
+        removed. (Closes: #461249)
+      - make amule-utils recommend ttf-dejavu-core and not ttf-bitstream-vera.
+
+  * Bump Standards-Version to 3.7.3 (no changes needed).
+
+  * Move the Homepage from the description to its own field.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sun, 09 Mar 2008 20:49:57 +0100
+
+amule (2.1.3-5) unstable; urgency=medium
+
+  * The "Absolutely Cuckoo" release.
+
+  * Fix init script to not exit with non-zero status if VERBOSE=no,
+    but no error happened. (Closes: #461774)
+
+  * Move packaging to a git repository under the collab-maint umbrella.
+    Add a X-Collab-Maint header to reflect what kind of help I'd welcome.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sun, 09 Mar 2008 17:58:12 +0100
+
+amule (2.1.3-4) unstable; urgency=low
+
+  * The "Let's Pretend We're Bunny Rabbits" release.
+
+  * Rewrite the init script, making it LSB compliant. Remove support
+    for RUN_AT_STARTUP in /etc/default/amule-daemon, and add support
+    for AMULED_HOME, which closes: #389488.
+
+  * Use a better icon, taken from the Ubuntu package. (Closes: #394671)
+
+  * Move menu files from Apps/Net to Applications/Network/File Transfer.
+
+  * Fix typo in description (hander -> handler).
+
+ -- Adeodato Simó <dato@net.com.org.es>  Thu, 09 Aug 2007 00:10:56 +0200
+
+amule (2.1.3-3) unstable; urgency=low
+
+  * The "Let's pretend it never happened" release.
+
+  * Drop the just introduced patch unconditional_global_search.diff, because
+    upstream thinks it's a very bad idea.
+
+  * Patch acinclude.m4 to cope with libpng versions that are not X.Y.Z, like
+    the current 1.2.15beta5. This makes amuleweb link against libpng12 again,
+    enabling the generation of download progress bar images. Thanks to Emilio
+    Pozuelo Monfort for the heads-up. (Closes: #424774)
+
+  * Add libpng12-dev to Build-Depends.
+
+  * Use quilt.make.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Sun, 20 May 2007 12:32:45 +0200
+
+amule (2.1.3-2) unstable; urgency=low
+
+  * The "Not only bureaucracy" release.
+
+  * Add patch to unconditionally set the type of search to "Global". Thanks
+    to Robert Millan for the idea/patch. (Let's say this closes: #384344.)
+
+  * Remove diversions in amule.preinst in addition to amule-utils.preinst,
+    since otherwise there'll be dangling diversions on systems where only
+    amule is installed. Thanks to  Javier Fernandez-Sanguino Peña for the
+    diagnosis. (Closes: #404557)
+
+  * Use ${source:Version} instead of ${Source-Version}.
+
+  * Move myself from Uploaders to Maintainer, at Julien's request.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Tue, 15 May 2007 13:58:38 +0200
+
+amule (2.1.3-1) unstable; urgency=low
+
+  * The "Over my dead body you'll wear those sneakers to college!" release.
+
+  * New upstream release packaged.
+
+  * Ship an amulegui.desktop file in /usr/share/applications.
+
+  * Fix typos in manpages, spotted by A. Costa.  (Closes: #377760, 377761)
+
+  * Now that xmule has been removed from the archive (#370524), get rid of
+    diversions in the package completely:
+
+    + make amule-utils conflict with xmule (<= 1.10.0b-1).
+    + loose ed2k.wrapper, and don't have /usr/bin/ed2k be a link to it, but
+      the real ed2k binary.
+
+    If xmule ever comes back, this will be handled with alternatives instead.
+
+  * Introduce code in amule-utils.preinst to clean up all the diversion mess
+    that previous versions left behind. Kudos to Steinar H. Gunderson for the
+    detailed analysis of the situation.  (Closes: #372279, #374806)
+
+ -- Adeodato Simó <dato@net.com.org.es>  Fri, 21 Jul 2006 04:37:15 +0200
+
+amule (2.1.2-3) unstable; urgency=low
+
+  * The "Look at you now, young man" release.
+
+  * Move /usr/share/amule/webserver from amule-daemon to amule-common:
+    + introduce the appropriate Replaces.
+    + lower dependency on amule-common by amule-utils and amule-utils-gui
+      to a recommends, and move the tiny /usr/share/cas from amule-common
+      to amule-utils because of this.
+
+  * Sundry fixes to debian/control:
+    + don't make amule recommend amule-daemon, only amule-utils, and make it
+      suggest amule-utils-gui; make amule-daemon suggest amule-utils as well.
+    + don't make amule-common conflict amule-utils, only replace it as adviced
+      by Steve Langasek and myself in #343909 five months ago.
+    + rewrite all package descriptions, trying to follow the guidelines in
+      Dev-Ref. amule-common no longer claims to include the ed2k link handler,
+      which closes: #370421.
+
+  * New patches (handled with quilt, so modified debian/rules to invoke it,
+    and added it to Build-Depends):
+
+    + debian/patches/cas_configfile.c_good_default_paths.diff:
+      Make /usr/bin/cas write proper paths for stat.png and tmp.html to the
+      configfile it creates when one is not present, and make it use Bitstream
+      Vera by default (ttf-bitstream-vera added to Recommends).
+
+    + debian/patches/configure_ignore_gdlib-config_garbage.diff:
+      Reintroduce patch by Steve Langasek to ignore the output of gdlib-config,
+      as to avoid linking against unneeded libraries. The patch was introduced
+      in amule 2.0.3-4 and dropped in 2.1.0-1 (?!).  (Closes: #340395)
+
+  * The build system detects the presence of bfd.h from binutils-dev and
+    unconditionally links against libbfd.so, introducing a dependency against
+    binutils in the packages. To fix this without the need of Build-Conflicts,
+    build the package with `$(MAKE) BFD_LIB= BFD_FLAGS=` from debian/rules.
+
+  * Fix the dpkg-divert mess that happened with the move of ed2k out of the
+    amule package (binary was in amule-utils, but dpkg-divert was still called
+    with --package amule); see amule-utils.preinst. The plan is to get rid of
+    dpkg-divert as soon as I get something done about xmule (see #370524).
+
+  * Make the changes to amule.xpm that make it 32x32 as per the Menu Policy
+    keep the aspect ratio instead of just resizing. Also, ship the new icon in
+    debian/amule-32.xpm and replace it at runtime, instead of shipping changes
+    (which are three times bigger) in the .diff.gz.
+
+  * Drop not-really-useful README.Debian for amule-utils and amule, and write
+    basic instructions to run amuled in amule-daemon.README.Debian.
+
+  * Revamp the copyright file, with proper list of authors, copyright notices,
+    and license terms (GPLv2 or higher, not only v2).
+
+  * Add a X-VCS-Bzr header to the source package, pointing to the repository
+    where the packaging is kept.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Wed,  7 Jun 2006 23:58:27 +0200
+
+amule (2.1.2-2) unstable; urgency=low
+
+  * The "Oooh, poor kiddo" release.
+
+  * Overhaul debian/rules. Among other changes:
+    + provide a binary-arch target that actually builds some .debs; this fixes
+      recent FTBFS in buildds.  (Closes: #369995)
+    + do not call ./configure more times than needed. (Closes: #368381)
+    + remove dpatch, since it is no longer used; drop build-dependency, and
+      delete no longer used patches from the patches/ subdirectory as well.
+    + build-depend on autotools-dev, to ensure that the config.{sub,guess}
+      snippet actually makes us build against the latest version of these files.
+    + use debhelper *.install files instead of mv commands from debian/rules;
+      while at it, remove *.dirs files, since they're not needed.
+    + use $builddir != $srcdir, to make the clean rule simpler.
+
+  * Add to amule-utils missing Replaces: amule (<< 2.1.2-1) (closes: #370068).
+    In amule 2.1.1-3, debian/rules called dh_link without -pamule-common, thus
+    shipping the symlinks in amule instead of amule-common.
+
+  * Do not ship the placeholder manpages from the debian/mans directory, and
+    ship the ones provided by upstream, which have actual content, are useful
+    and translated to four languages.
+
+  * Add missing dpkg-divert --remove /usr/share/man/man1/ed2k.1.gz in
+    amule-utils.postrm. Will hopefully get totally rid of dpkg-divert in the
+    next upload.
+
+  * Remove debian/amule.postinst and debian/amule-utils-gui.postinst, since
+    they only contain the very same snippet dh_installmenu already installs.
+
+  * Make amule-utils-gui.menu point to wxcas.xpm and alc.xpm instead of using
+    amule.xpm for all three shipped binaries, and ship a copy of amule.xpm as
+    amulegui.xpm since amule-utils-gui does not depend on amule (thx, lintian).
+
+  * Fix debian/watch file; now the http://sf.net shortcut is used.
+
+  * Add myself as an uploader, and mutter something about #369995 traffic.
+
+ -- Adeodato Simó <dato@net.com.org.es>  Mon,  5 Jun 2006 01:50:41 +0200
+
+amule (2.1.2-1.1) unstable; urgency=low
+
+  * NMU to fix serious bug before dinstall, with maintainer's permission.
+  * Make amule-utils Replace: amule-common (<< 2.1.2-1), since ed2k.amule
+    and other files moved from there in the last upload. (Closes: #369959)
+
+ -- Adeodato Simó <dato@net.com.org.es>  Fri,  2 Jun 2006 18:13:38 +0200
+
+amule (2.1.2-1) unstable; urgency=low
+
+  * New upstream release, youhou !
+  * Delete some dependencies on amule and amule-daemon (Closes: #369746)
+  * Fix type in the init script of amuled (Closes: #368447)
+  * Arch of amule-common is now all (Closes: #369796)
+  * Remove old patches (Closes: #369775)
+  * fix error in debian/rules file, can now build with -O2 (Closes: #369800)
+  * Should not take 100% CPU (Closes: #361770)
+  * Desktop file is present for amulegui (Closes: #366777)
+
+ -- Julien Delange <julien@gunnm.org>  Thu,  1 Jun 2006 16:37:42 +0200
+
+amule (2.1.1-3) unstable; urgency=low
+
+  * Change description (Closes: #360138)
+  * Can control file status with amulecmd (Closes: #360135)
+  * Change amule-utils description (Closes: #362725)
+
+ -- Julien Delange <julien@gunnm.org>  Wed, 19 Apr 2006 04:01:27 +0200
+
+amule (2.1.1-2) unstable; urgency=low
+
+  * Fix build-depends, add dpatch (Closes: #359093) 
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 27 Mar 2006 15:38:01 +0200
+
+amule (2.1.1-1) unstable; urgency=low
+
+  * New upstream release (Closes: #358968)
+  * Fix crypto++ identity bug ( Closes: #348579 )
+  * ed2k links should work now (Closes: #300414)
+
+ -- Julien Delange <julien@gunnm.org>  Sat, 25 Mar 2006 04:25:34 +0100
+
+amule (2.1.0-3) unstable; urgency=low
+
+  * Fix init.d mistake (Closes: #346581)
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 13 Feb 2006 02:48:13 +0100
+
+amule (2.1.0-2) unstable; urgency=low
+
+  * Fix typo in debian/control (Closes: #330705)
+  * No dependency on amule for amule-utils-gui (Closes: #348752)
+  * Add init-script for amule-daemon (Closes: #346581)
+  * Support now .mka and .flac files (Closes: #347783)
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 10 Feb 2006 17:33:16 +0100
+
+amule (2.1.0-1) unstable; urgency=low
+
+  * No more conflicts between amule-common and old versions of amule
+  	( Closes:#343909)
+  * New upstream version ( Closes: #345768)
+  * Text is now conforming with columns width (Closes: #306849)
+  * Does not ignore gtk theme now (Closes: #316672)
+  * Support for Kademlia networks
+  * aMule icon appears now in the system tray without restart (Closes: #297114)
+  * Add new binary amulegui in amule-utils package, remove amulecmdDLG
+
+ -- Julien Delange <julien@gunnm.org>  Wed,  4 Jan 2006 15:11:19 +0100
+
+amule (2.0.3-4) unstable; urgency=low
+
+  * Fix amule-daemon package, this package does not need amule package
+  	(Closes: #325145)
+  * Fix freetype6 bug for amule-utils (Closes: #340395)
+  			- see file debian/patches/bug340395-freetype6.diff
+  * Installable on sid (Closes: #341401)
+
+ -- Julien Delange <julien@gunnm.org>  Tue, 29 Nov 2005 19:17:41 +0100
+
+amule (2.0.3-3) unstable; urgency=low
+
+  * amuled is now in amule-daemon package (Closes: #329110, #325145)
+  * Use now gtk2, should work on all architectures (Closes: #308874)
+  * Fix preview in background (Closes: #306323)
+  * Fix preinst script (Closes: #310613)
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 26 Sep 2005 21:03:46 +0200
+
+amule (2.0.3-2.1) unstable; urgency=low
+
+  * Non-maintainer upload during BSP.
+
+  * Do not use an internal copy of libcrypto++, dynamically link against it
+    instead (closes: #323010). Needed changes:
+
+    + debian/control: add libcrypto++-dev to Build-Dependencies.
+    + debian/rules: pass --disable-embedded-crypto to ./configure.
+
+ -- Adeodato Simó <asp16@alu.ua.es>  Sun, 04 Sep 2005 05:03:53 +0200
+
+amule (2.0.3-2) unstable; urgency=low
+
+  * Fix build ( Closes: #318365 ) 
+  * Can reinstall amule (Closes: #318572)
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 29 Jul 2005 01:20:58 +0200
+
+amule (2.0.3-1) unstable; urgency=low
+
+  * New upstream release
+  * Fix gui bugs (Closes: #290901, #290647)
+  * Fix FTBFS bug on amd64(Closes: #314777)
+
+ -- Julien Delange <julien@gunnm.org>  Tue, 21 Jun 2005 20:34:05 +0200
+
+amule (2.0.1-1) unstable; urgency=low
+
+  * New upstream version 
+  * Fix bug with zh_CN locale (Closes: #289142)
+  * Fix memleaks and high CPU usage (Closes: #295975)
+  * Add watchfile (Closes: #308616)
+
+ -- Julien Delange <julien@gunnm.org>  Wed, 18 May 2005 08:39:54 +0200
+
+amule (2.0.0-1) unstable; urgency=low
+
+  * New upstream version
+  * Don't need libcurl (Closes: #305156)
+  * Fix buggy display (Closes: #306271)
+  * French trans is now fixed (Closes: #287813)
+  * Handling properly all filename (Closes: #295529)
+  * The time remaining bug is fixed, print now the good time remaining
+    (Closes: #274715)
+  * Fix transparency error in taskbar (Closes: #285179)
+
+ -- Julien Delange <julien@gunnm.org>  Tue,  3 May 2005 15:32:28 +0200
+
+amule (1.2.6+rc8-4) unstable; urgency=low
+
+  * Will run on powerpc now (compile against gtk1.2) 
+  * Don't use wxwidgets (Closes: #306062)
+
+ -- Julien Delange <julien@gunnm.org>  Tue, 26 Apr 2005 20:25:13 +0200
+
+amule (1.2.6+rc8-3) unstable; urgency=low
+
+  * Fix ed2k wrapper bug (Closes: #303007)
+  * Fix some crashes (Closes: #295104)
+  * Fix non-UTF8 file (alc.desktop), no longer create error when upgrading
+    (Closes: #284308, #295409, #285358 )
+  * Can use now distcc to compile aMule (Closes: #298935)
+  * Add a diversion for ed2k manpage (Closes: #301226)
+  * Add amuled in package. Be careful, this version is no longer stable, the
+    next will be ok
+
+ -- Julien Delange <julien@gunnm.org>  Sat,  9 Apr 2005 00:08:30 +0200
+
+amule (1.2.6+rc8-2) unstable; urgency=low
+
+  * Add missing dependencies (Closes: #289057) 
+
+ -- Julien Delange <julien@gunnm.org>  Sun,  9 Jan 2005 11:24:39 +0100
+
+amule (1.2.6+rc8-1) unstable; urgency=low
+
+  * Fix wxTextCtrl bug, use now less CPU (Closes: #279475)
+  * Remove muuli.wdr (Closes: #287005)
+  * New upstream release (Closes: #286943)
+  * Support eMule >= 0.44 tags format (Closes: #276101)
+  * add some missing manpages
+  * use now wx2.5 library
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 27 Dec 2004 13:48:34 +0100
+
+amule (1.2.6+rc7-2) unstable; urgency=low
+
+  * Fix Build-depends, switch to libcurl3 (Closes: #279473) 
+  * Fix FTBFS with AMD64 (Closes: #285110)
+  * Fix some files missing in the package (Closes: #281027)
+
+ -- Julien Delange <soda@gunnm.org>  Mon, 13 Dec 2004 13:08:13 +0100
+
+amule (1.2.6+rc7-1) unstable; urgency=low
+
+  * Fix some bugs in GUI (Closes: #271877)
+  * Fix the minsize bug (Closes: #275876)
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 22 Oct 2004 19:07:27 +0200
+
+amule (1.2.6+rc6-1) unstable; urgency=low
+
+  * New upstream release 
+  * Improve documentation, remove mistakes in README (Closes: #247135)
+  * Returns 0 status with --version option (Closes: #243470)
+  * aMule is show in systray when started for the first time (Closes: #262322)
+  * Doesn't crash anymore even the clients.met file is corrupted (Closes: #260459)
+  * Workaround with UTF8 and locales (Closes: #262999)
+  * aMule should work on Alpha now (Closes: #274687)
+  * Fix bug with server.met and adresses.dat (Closes: #262325)
+  * Fix but with non-default locales (Closes: #273532)
+
+ -- Julien Delange <julien@gunnm.org>  Mon,  4 Oct 2004 12:07:00 +0200
+
+amule (1.2.6+rc5-2.1) unstable; urgency=high
+
+  * NMU with maintainer agreement
+  * Add a patch to fix acinclude.m4 and fix builing process on 
+    new libcrypto++ (closes: #268460)
+ 
+ -- Pierre Machard <pmachard@debian.org>  Sun, 29 Aug 2004 08:51:54 +0200
+
+amule (1.2.6+rc5-2) unstable; urgency=low
+
+  * Delete dependency with xlibs-dev (Closes: #262505) 
+
+ -- Julien Delange <julien@gunnm.org>  Sun, 15 Aug 2004 18:41:17 +0200
+
+amule (1.2.6+rc5-1) unstable; urgency=low
+
+  * Less crashes (Closes: #244063)
+  * Fix problems on sparc (Closes: #239809)
+  * New upstream relase (Closes: #260066)
+  * Improve GUI, improve stability (Closes: #250182)
+  * amuleweb works now (Closes: #238939)
+  * New manpage for amulecmd (Closes: #255113)
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 30 Apr 2004 16:05:57 +0200
+
+amule (1.2.6+cvs20040620-1) unstable; urgency=low
+
+  * Less CPU load (Closes: #247113)
+  * More stability (Closes: #248367, #251756, #244063, #250182)
+  * New way to share files (Closes: #254604)
+  * Fix error in amulecmd manpage (Closes: 255113)
+  * Fix manpage directory (Closes: #255112)
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 30 Apr 2004 16:05:57 +0200
+
+amule (1.2.6+2.0.0rc3-2) unstable; urgency=low
+
+  * add amule-utils package (Closes: #246685) 
+  * Fix some misplaced directories (Closes: #246871)
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 30 Apr 2004 16:05:57 +0200
+
+amule (1.2.6+2.0.0rc3-1) unstable; urgency=low
+
+  * Improve stability of amule (Closes: #244405, #245531, #244410, #244063, #241137, #241398)
+  * Fix GUI bugs (Closes: #240477)
+  * Improve disk writing, expecially on FAT32 filesystem (Closes: #240928)
+  * Know when it's the first time (Closes: #240476)
+
+ -- Julien Delange <julien@gunnm.org>  Sat, 17 Apr 2004 12:31:46 +0200
+
+amule (1.2.6+2.0.0rc2-2) unstable; urgency=low
+
+  * Avoid problem with upload on 2.0.0rc2
+  * fix german translation (Closes: #244093)
+
+ -- Julien Delange <julien@gunnm.org>  Sat, 17 Apr 2004 12:31:46 +0200
+
+amule (1.2.6+2.0.0rc2-1) unstable; urgency=low
+
+  * Delete the debconf template, use NEWS.Debian (Closes: #240856)
+  * aMule runs now on ia64 (Closes: #233809)
+  * aMule no longer write 0 length file (Closes: #228929)
+  * Typos fixed (Closes: #240477, #242173)
+ 
+ -- Julien Delange <julien@gunnm.org>  Tue, 30 Mar 2004 12:45:41 +0200
+
+amule (1.2.6+2.0.0rc1-1) unstable; urgency=low
+
+  * New upstream release (cvs version)
+  * Improve description ( Closes: #234318 )
+  * Implement secure hash ( Closes: #236961 )
+  * New code for GUI ( Closes: #234089 )
+  * No 0-len file are now written ( Closes: #228929 )
+
+ -- Julien Delange <julien@gunnm.org>  Thu, 26 Feb 2004 13:38:33 +0100
+
+amule (1.2.6-2) unstable; urgency=low
+
+  * fix postinst script ( Closes: #229755 ) 
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 20 Feb 2004 19:37:40 +0100
+
+amule (1.2.6-1) unstable; urgency=low
+
+  * New upstream release
+  * aMule supports PPC ( Closes: #219574 )
+  * aMule no longuer writes 0 length files ( Closes: #228929 )
+  * Fix the preinst script, he shouldn't fail ( Closes: #229755 )
+
+ -- Julien Delange <julien@gunnm.org>  Tue, 10 Feb 2004 11:36:20 +0100
+
+amule (1.2.5-1) unstable; urgency=low
+
+  * New upstream release
+  * aMule supports now ppc architecture, not fully.
+
+ -- Julien Delange <julien@gunnm.org>  Tue, 10 Feb 2004 11:36:20 +0100
+
+amule (1.2.4-2) unstable; urgency=low
+
+  * Fix preint script ( Closes: #227699 )
+  * Closes: #227712
+  * Closes: #227728
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 19 Jan 2004 23:33:40 +0100
+
+amule (1.2.4-1) unstable; urgency=low
+
+  * New upstream release
+  * Fix preinst and postint bugs ( Closes: #226837 )
+  * Fix the build-deps bug ( Closes: #226935 , Closes: #226958 )
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 12 Jan 2004 01:34:06 +0100
+
+amule (1.2.3-1) unstable; urgency=low
+
+  * New upstream release
+  * Turn off optimization, this option crash on many computers ( Closes: #221715 )
+
+ -- Julien Delange <julien@gunnm.org>  Mon,  5 Jan 2004 17:09:55 +0100
+
+amule (1.2.1-2) unstable; urgency=low
+
+  * Ajust icon size (old icon not compliant wih debian-policy)
+  * Add manpages for amulecmd and amulecmdDLG (french and english languages)
+  * Fix a stupid hack in the debian/rulez file.
+
+ -- Julien Delange <julien@gunnm.org>  Thu, 18 Dec 2003 16:12:46 +0100
+
+amule (1.2.1-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Delange <soda@gunnm.org>  Mon, 15 Dec 2003 12:48:14 +0100
+
+amule (1.2.0-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 28 Nov 2003 15:36:50 +0100
+
+amule (1.1.2-3) unstable; urgency=low
+
+  * Fix the conflict this xmule ( Closes: #218284 ) 
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 10 Nov 2003 22:36:05 +0100
+
+amule (1.1.2-2) unstable; urgency=low
+
+  * Change the flags in the debian/rulez file, optimisations are enabled
+  * Closes: 219569
+
+ -- Julien Delange <julien@gunnm.org>  Fri,  7 Nov 2003 13:36:54 +0100
+
+amule (1.1.2-1) unstable; urgency=low
+
+  * New upstream release, REALLY fixed the 'no sources' bug.
+
+ -- Julien Delange <julien@gunnm.org>  Tue,  4 Nov 2003 18:39:55 +0100
+
+amule (1.1.1b-1) unstable; urgency=low
+
+  * New upstream release ( Closes: #219017 )
+
+ -- Julien Delange <julien@gunnm.org>  Mon,  3 Nov 2003 23:29:04 +0100
+
+amule (1.1.1-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Delange <julien@gunnm.org>  Sat,  1 Nov 2003 13:15:23 +0100
+
+amule (1.1.0-2) unstable; urgency=low
+
+  * New package, working this the new version of the libwxgtk2.4 
+  * Add the new icon, getting it from the CVS
+  * Add manpages for amule and ed2k
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 27 Oct 2003 20:01:32 +0100
+
+amule (1.1.0-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Delange <julien@gunnm.org>  Tue, 21 Oct 2003 23:29:39 +0200
+
+amule (1.0.9-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Julien Delange <julien@gunnm.org>  Fri, 17 Oct 2003 14:55:25 +0200
+
+amule (1.0.8-2) unstable; urgency=low
+
+  * Add a menuitem when the package is installed
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 13 Oct 2003 12:58:57 +0200
+
+amule (1.0.8-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Julien Delange <julien@gunnm.org>  Mon, 13 Oct 2003 00:09:25 +0200
+
+amule (1.0.7-1) unstable; urgency=low
+
+  * New upstream release
+  * Remove message "client too old" when searching on ED2K network
+
+ -- Julien Delange <julien@gunnm.org>  Sat,  4 Oct 2003 02:05:25 +0200
+
+amule (1.0.6-1) unstable; urgency=low
+
+  * Initial Release
+  * Close the bugreport for the ITP (Closes: #212924)
+
+ -- Julien Delange <julien@gunnm.org>  Sat, 27 Sep 2003 00:11:07 +0200
+

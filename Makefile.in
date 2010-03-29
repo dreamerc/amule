@@ -58,15 +58,16 @@ am__aclocal_m4_deps = $(top_srcdir)/m4/GeoIP.m4 \
 	$(top_srcdir)/m4/glibc21.m4 $(top_srcdir)/m4/iconv.m4 \
 	$(top_srcdir)/m4/intdiv0.m4 $(top_srcdir)/m4/inttypes-pri.m4 \
 	$(top_srcdir)/m4/inttypes.m4 $(top_srcdir)/m4/inttypes_h.m4 \
-	$(top_srcdir)/m4/lcmessage.m4 $(top_srcdir)/m4/lib-ld.m4 \
-	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
-	$(top_srcdir)/m4/libpng.m4 $(top_srcdir)/m4/libupnp.m4 \
-	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/pkg.m4 \
-	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/m4/readline.m4 \
-	$(top_srcdir)/m4/stdint_h.m4 $(top_srcdir)/m4/uintmax_t.m4 \
-	$(top_srcdir)/m4/ulonglong.m4 $(top_srcdir)/m4/wxwin.m4 \
-	$(top_srcdir)/m4/zlib.m4 $(top_srcdir)/acinclude.m4 \
-	$(top_srcdir)/configure.in
+	$(top_srcdir)/m4/kde.m4 $(top_srcdir)/m4/lcmessage.m4 \
+	$(top_srcdir)/m4/lib-ld.m4 $(top_srcdir)/m4/lib-link.m4 \
+	$(top_srcdir)/m4/lib-prefix.m4 $(top_srcdir)/m4/libpng.m4 \
+	$(top_srcdir)/m4/libupnp.m4 $(top_srcdir)/m4/nls.m4 \
+	$(top_srcdir)/m4/pkg.m4 $(top_srcdir)/m4/plasmamule.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/m4/qt.m4 \
+	$(top_srcdir)/m4/readline.m4 $(top_srcdir)/m4/stdint_h.m4 \
+	$(top_srcdir)/m4/uintmax_t.m4 $(top_srcdir)/m4/ulonglong.m4 \
+	$(top_srcdir)/m4/wxwin.m4 $(top_srcdir)/m4/zlib.m4 \
+	$(top_srcdir)/acinclude.m4 $(top_srcdir)/configure.in
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
@@ -172,11 +173,9 @@ ED2K_FALSE = @ED2K_FALSE@
 ED2K_MANPAGES = @ED2K_MANPAGES@
 ED2K_TRUE = @ED2K_TRUE@
 EGREP = @EGREP@
-ENABLE_IP2COUNTRY_FALSE = @ENABLE_IP2COUNTRY_FALSE@
-ENABLE_IP2COUNTRY_TRUE = @ENABLE_IP2COUNTRY_TRUE@
-ENABLE_UPNP_FALSE = @ENABLE_UPNP_FALSE@
-ENABLE_UPNP_TRUE = @ENABLE_UPNP_TRUE@
 EXEEXT = @EXEEXT@
+FILEVIEW_FALSE = @FILEVIEW_FALSE@
+FILEVIEW_TRUE = @FILEVIEW_TRUE@
 GDLIB_CFLAGS = @GDLIB_CFLAGS@
 GDLIB_CONFIG_PATH = @GDLIB_CONFIG_PATH@
 GDLIB_LDFLAGS = @GDLIB_LDFLAGS@
@@ -201,6 +200,11 @@ INTLBISON = @INTLBISON@
 INTLLIBS = @INTLLIBS@
 INTLOBJS = @INTLOBJS@
 INTL_LIBTOOL_SUFFIX_PREFIX = @INTL_LIBTOOL_SUFFIX_PREFIX@
+KDE4_CONFIG = @KDE4_CONFIG@
+KDE_HEADER_DIR = @KDE_HEADER_DIR@
+KDE_ICON_PATH = @KDE_ICON_PATH@
+KDE_MODULE_PATH = @KDE_MODULE_PATH@
+KDE_SERVICE_PATH = @KDE_SERVICE_PATH@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LEX = @LEX@
@@ -249,13 +253,19 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
+PLASMAMULE_FALSE = @PLASMAMULE_FALSE@
+PLASMAMULE_TRUE = @PLASMAMULE_TRUE@
 POSUB = @POSUB@
 POW_LIB = @POW_LIB@
+QT_CORE_CXXFLAGS = @QT_CORE_CXXFLAGS@
+QT_CORE_LIBS = @QT_CORE_LIBS@
+QT_GUI_CXXFLAGS = @QT_GUI_CXXFLAGS@
+QT_GUI_LIBS = @QT_GUI_LIBS@
+QT_MOC = @QT_MOC@
 RANLIB = @RANLIB@
 RC = @RC@
 RCFLAGS = @RCFLAGS@
 READLINE_LIBS = @READLINE_LIBS@
-REGEX_LIBS = @REGEX_LIBS@
 RESOLV_LIB = @RESOLV_LIB@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -266,8 +276,8 @@ SYS_WIN32_TRUE = @SYS_WIN32_TRUE@
 USE_INCLUDED_LIBINTL = @USE_INCLUDED_LIBINTL@
 USE_NLS = @USE_NLS@
 VERSION = @VERSION@
+WEBSERVER_MANPAGES = @WEBSERVER_MANPAGES@
 WEB_FALSE = @WEB_FALSE@
-WEB_MANPAGES = @WEB_MANPAGES@
 WEB_TRUE = @WEB_TRUE@
 WXBASE_CPPFLAGS = @WXBASE_CPPFLAGS@
 WXBASE_LIBS = @WXBASE_LIBS@
@@ -282,7 +292,6 @@ WX_CXXFLAGS = @WX_CXXFLAGS@
 WX_CXXFLAGS_ONLY = @WX_CXXFLAGS_ONLY@
 WX_DEBUG = @WX_DEBUG@
 WX_LIBS = @WX_LIBS@
-WX_LIBS_STATIC = @WX_LIBS_STATIC@
 WX_PORT = @WX_PORT@
 WX_RESCOMP = @WX_RESCOMP@
 WX_SHARED = @WX_SHARED@
@@ -290,7 +299,8 @@ WX_UNICODE = @WX_UNICODE@
 WX_VERSION_FULL = @WX_VERSION_FULL@
 WX_VERSION_MAJOR = @WX_VERSION_MAJOR@
 WX_VERSION_MINOR = @WX_VERSION_MINOR@
-X11LIBS = @X11LIBS@
+XAS_FALSE = @XAS_FALSE@
+XAS_TRUE = @XAS_TRUE@
 XGETTEXT = @XGETTEXT@
 YACC = @YACC@
 ZLIB_CPPFLAGS = @ZLIB_CPPFLAGS@
@@ -345,7 +355,7 @@ sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 SUBDIRS = $(am__append_1) docs src unittests
 EXTRA_DIST = amule.rc amule.ico amule.png convert.ico \
-	README.Debian-Packages  aMule.spec \
+	README.Debian-Packages aMule-CVS.spec aMule.spec \
 	amule_build_install.sh autogen.sh \
 	po/l10n.xsl
 
@@ -361,6 +371,7 @@ DISTCHECK_CONFIGURE_FLAGS = \
 	--enable-amule-gui \
 	--enable-cas \
 	--enable-wxcas \
+	--enable-plasmamule \
 	--enable-alc \
 	--enable-alcc
 

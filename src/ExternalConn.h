@@ -1,8 +1,9 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 Kry ( elkry@users.sourceforge.net / http://www.amule.org )
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2003-2008 Kry ( elkry@users.sourceforge.net / http://www.amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2008 Froenchenko Leonid (lfroen@gmail.com)
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -33,6 +34,7 @@
 #include "amuleIPV4Address.h"	// for amuleIPV4Address
 #include "RLE.h"	// for RLE
 #include "DownloadQueue.h"
+#include "PartFile.h"			// for SourcenameItemMap
 
 class wxSocketServer;
 class wxSocketEvent;
@@ -75,54 +77,27 @@ class CFileEncoderMap : public std::map<T *, E> {
 };
 
 /*!
- * PartStatus strings are quite long - RLE encoding will help.
+ * PartStatus strings and gap lists are quite long - RLE encoding will help.
  * 
  * Instead of sending each time full part-status string, send
  * RLE encoded difference from previous one.
- * 
- * However, gap status is different - it's already kind of RLE
- * encoding, so futher compression will help a litter (Shannon
- * theorem). Instead, calculate diff between list of gaps.
+ *
+ * PartFileEncoderData class is used for decode only,
+ * while CPartFile_Encoder is used for encode only.
  */
-class CPartFile_Encoder {
-		//
-		// List of gaps sent to particular client. Since clients
-		// can request lists in different time, they can get
-		// different results
-		PartFileEncoderData m_enc_data;
-		
-		// gaps are also RLE encoded, but list have variable size by it's nature.
-		// so realloc buffer when needed.
-		// This buffer only needed on core-side, where list is turned into array
-		// before passing to RLE. Decoder will just use RLE internal buffer
-		// Buffer can be static, since it is accessed with mutex locked
-		typedef std::vector<uint64> GapBuffer;
-		static GapBuffer m_gap_buffer;
-		
+class CPartFile_Encoder : public PartFileEncoderData {
 		CPartFile *m_file;
+		SourcenameItemMap m_sourcenameItemMap;
+		int m_sourcenameID;
 	public:
 		// encoder side
-		CPartFile_Encoder(CPartFile *file);
-		
-		// decoder side
-		CPartFile_Encoder(int size);
-
-		~CPartFile_Encoder();
-		
-		// stl side :)
-		CPartFile_Encoder();
-		
-		CPartFile_Encoder(const CPartFile_Encoder &obj);
-
-		CPartFile_Encoder &operator=(const CPartFile_Encoder &obj);
+		CPartFile_Encoder(CPartFile *file = 0) { m_file = file; m_sourcenameID = 0; }
 		
 		// encode - take data from m_file
 		void Encode(CECTag *parent_tag);
-		
-		void ResetEncoder()
-		{
-			m_enc_data.ResetEncoder();
-		}
+
+		// Encoder may reset history if full info requested
+		void ResetEncoder();
 };
 
 typedef CFileEncoderMap<CPartFile , CPartFile_Encoder, CDownloadQueue> CPartFile_Encoder_Map;
@@ -134,15 +109,8 @@ class CKnownFile_Encoder {
 		RLE_Data m_enc_data;
 		CKnownFile *m_file;
 	public:
-		CKnownFile_Encoder(CKnownFile *file);
-		~CKnownFile_Encoder();
+		CKnownFile_Encoder(CKnownFile *file = 0) { m_file = file; }
 
-		// stl side :)
-		CKnownFile_Encoder();
-		
-		CKnownFile_Encoder(const CKnownFile_Encoder &obj);
-
-		CKnownFile_Encoder &operator=(const CKnownFile_Encoder &obj);
 		// encode - take data from m_file
 		void Encode(CECTag *parent_tag);
 
@@ -203,7 +171,7 @@ class CObjTagMap {
 
 
 class CECServerSocket;
-
+class ECNotifier;
 
 class ExternalConn : public wxEvtHandler
 {
@@ -216,14 +184,7 @@ public:
 	~ExternalConn();
 	
 	wxSocketServer *m_ECServer;
-
-	static CECPacket *ProcessRequest2(
-		const CECPacket *request,
-		CPartFile_Encoder_Map &,
-		CKnownFile_Encoder_Map &,
-		CObjTagMap &);
-	
-	static CECPacket *Authenticate(const CECPacket *);
+	ECNotifier *m_ec_notifier;
 
 	void AddSocket(CECServerSocket *s);
 	void RemoveSocket(CECServerSocket *s);
@@ -234,6 +195,144 @@ private:
 	void OnServerEvent(wxSocketEvent& event);
 	DECLARE_EVENT_TABLE()
 };
+
+class ECUpdateMsgSource {
+	public:
+		virtual ~ECUpdateMsgSource()
+		{
+		}
+		virtual CECPacket *GetNextPacket() = 0;
+};
+
+class ECPartFileMsgSource : public ECUpdateMsgSource {
+		typedef struct {
+			bool m_new;
+			bool m_comment_changed;
+			bool m_removed;
+			bool m_finished;
+			bool m_dirty;
+			CPartFile *m_file;
+		} PARTFILE_STATUS;
+		std::map<CMD4Hash, PARTFILE_STATUS> m_dirty_status;
+	public:
+		ECPartFileMsgSource();
+		
+		void SetDirty(CPartFile *file);
+		void SetNew(CPartFile *file);
+		void SetCompleted(CPartFile *file);
+		void SetRemoved(CPartFile *file);
+		
+		virtual CECPacket *GetNextPacket();
+	
+};
+
+class ECKnownFileMsgSource : public ECUpdateMsgSource {
+		typedef struct {
+			bool m_new;
+			bool m_comment_changed;
+			bool m_removed;
+			bool m_dirty;
+			CKnownFile *m_file;
+		} KNOWNFILE_STATUS;
+		std::map<CMD4Hash, KNOWNFILE_STATUS> m_dirty_status;
+	public:
+		ECKnownFileMsgSource();
+
+		void SetDirty(CKnownFile *file);
+		void SetNew(CKnownFile *file);
+		void SetRemoved(CKnownFile *file);
+		
+		virtual CECPacket *GetNextPacket();
+};
+
+class ECClientMsgSource : public ECUpdateMsgSource {
+	public:
+		virtual CECPacket *GetNextPacket();
+};
+
+class ECStatusMsgSource : public ECUpdateMsgSource {
+		uint32 m_last_ed2k_status_sent;
+		uint32 m_last_kad_status_sent;
+		void *m_server;
+
+		uint32 GetEd2kStatus();
+		uint32 GetKadStatus();
+	public:
+		ECStatusMsgSource();
+		
+		virtual CECPacket *GetNextPacket();
+};
+
+class ECSearchMsgSource : public ECUpdateMsgSource {
+		typedef struct {
+			bool m_new;
+			bool m_child_dirty;
+			bool m_dirty;
+			CSearchFile *m_file;
+		} SEARCHFILE_STATUS;
+		std::map<CMD4Hash, SEARCHFILE_STATUS> m_dirty_status;
+	public:
+		ECSearchMsgSource();
+		
+		void SetDirty(CSearchFile *file);
+		void SetChildDirty(CSearchFile *file);
+	
+		void FlushStatus();
+	
+		virtual CECPacket *GetNextPacket();
+};
+
+class ECNotifier {
+		//
+		// designated priority for each type of update
+		//
+		enum EC_SOURCE_PRIO {
+			EC_PARTFILE = 0,
+			EC_SEARCH,
+			EC_CLIENT,
+			EC_STATUS,
+			EC_KNOWN,
+			
+			EC_STATUS_LAST_PRIO
+		};
+		
+		//ECUpdateMsgSource *m_msg_source[EC_STATUS_LAST_PRIO];
+		std::map<CECServerSocket *, ECUpdateMsgSource **> m_msg_source;
+		
+		void NextPacketToSocket();
+		
+		CECPacket *GetNextPacket(ECUpdateMsgSource *msg_source_array[]);
+		// Make class non assignable
+		void operator=(const ECNotifier&);
+		ECNotifier(const ECNotifier&);
+	public:
+		ECNotifier();
+		~ECNotifier();
+		
+		void Add_EC_Client(CECServerSocket *sock);
+		void Remove_EC_Client(CECServerSocket *sock);
+		
+		CECPacket *GetNextPacket(CECServerSocket *sock);
+		
+		//
+		// Interface to notification macros
+		//
+		void DownloadFile_SetDirty(CPartFile *file);
+		void DownloadFile_RemoveFile(CPartFile *file);
+		void DownloadFile_RemoveSource(CPartFile *file);
+		void DownloadFile_AddFile(CPartFile *file);
+		void DownloadFile_AddSource(CPartFile *file);
+		
+		void Status_ConnectionState();
+		void Status_QueueCount();
+		void Status_UserCount();
+		
+		void SharedFile_AddFile(CKnownFile *file);
+		void SharedFile_RemoveFile(CKnownFile *file);
+		void SharedFile_RemoveAllFiles();
+
+};
+
 
 #endif // EXTERNALCONN_H
 // File_checked_for_headers

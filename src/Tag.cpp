@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -26,6 +26,7 @@
 
 #include "Tag.h"				// Interface declarations
 
+#include <common/Format.h>		// Needed for WXLONGLONGFMTSPEC
 
 #include "SafeFile.h"		// Needed for CFileDataIO
 #include "MD4Hash.h"			// Needed for CMD4Hash
@@ -77,7 +78,7 @@ CTag::CTag(const CTag& rTag)
 		m_pData = new unsigned char[rTag.GetBsobSize()];
 		memcpy(m_pData, rTag.GetBsob(), rTag.GetBsobSize());
 	} else {
-		wxASSERT(0);
+		wxFAIL;
 		m_uVal = 0;
 	}
 }
@@ -234,7 +235,7 @@ CTag &CTag::operator=(const CTag &rhs)
 			m_pData = p;
 			memcpy(m_pData, rhs.GetBsob(), rhs.GetBsobSize());
 		} else {
-			wxASSERT(0);
+			wxFAIL;
 			m_uVal = 0;
 		}
 	}
@@ -383,7 +384,7 @@ bool CTag::WriteNewEd2kTag(CFileDataIO* data, EUtf8Str eStrEncode) const
 				data->WriteString(*m_pstrVal,eStrEncode,0); 
 			} else {
 				printf("%s; Unknown tag: type=0x%02X\n", __FUNCTION__, uType);
-				wxASSERT(0);
+				wxFAIL;
 				return false;
 			}
 			break;
@@ -434,7 +435,7 @@ wxString CTag::GetFullInfo() const
 		strTag += wxString::Format(wxT("(Str%u)\""), m_uType - TAGTYPE_STR1 + 1)
 					+  *m_pstrVal + wxT("\"");
 	} else if (m_uType == TAGTYPE_UINT64) {
-		strTag += wxString::Format(wxT("(Int64)%") wxLongLongFmtSpec wxT("u"), m_uVal);
+		strTag += wxString::Format(wxT("(Int64)%") WXLONGLONGFMTSPEC wxT("u"), m_uVal);
 	} else if (m_uType == TAGTYPE_UINT32) {
 		strTag += wxString::Format(wxT("(Int32)%u"), (unsigned)m_uVal);
 	} else if (m_uType == TAGTYPE_UINT16) {
@@ -467,10 +468,6 @@ CTagHash::CTagHash(uint8 name, const CMD4Hash& value)
 
 void deleteTagPtrListEntries(TagPtrList* taglist)
 {
-	TagPtrList::const_iterator it;
-	for (it = taglist->begin(); it != taglist->end(); it++) {
-		delete *it;
-	}
-	taglist->clear();
+	DeleteContents(*taglist);
 }
 // File_checked_for_headers

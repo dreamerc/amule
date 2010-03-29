@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -47,7 +47,9 @@
 #endif
 
 // Prefer the POSIX interface to strerror_r()
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE	600
+#endif
 #include <string.h>			// Do_not_auto_remove
 
 #include <wx/utils.h>
@@ -145,7 +147,6 @@ BEGIN_EVENT_TABLE(CamuleDaemonApp, wxAppConsole)
 	EVT_MULE_TIMER(ID_CORE_TIMER_EVENT, CamuleDaemonApp::OnCoreTimer)
 
 	EVT_MULE_NOTIFY(CamuleDaemonApp::OnNotifyEvent)
-	EVT_MULE_LOGGING(CamuleDaemonApp::OnLoggingEvent)
 
 	// Async dns handling
 	EVT_MULE_INTERNAL(wxEVT_CORE_UDP_DNS_DONE, -1, CamuleDaemonApp::OnUDPDnsDone)
@@ -170,6 +171,7 @@ END_EVENT_TABLE()
 
 IMPLEMENT_APP(CamuleDaemonApp)
 
+#ifdef AMULED28
 /*
  * Socket handling in wxBase
  * 
@@ -317,7 +319,6 @@ void CAmuledGSocketFuncTable::RunSelect()
 		m_in_set->Detected(&GSocket::Detected_Read);
 		m_out_set->Detected(&GSocket::Detected_Write);
 	}
-	
 }
 
 GSocketGUIFunctionsTable *CDaemonAppTraits::GetSocketGUIFunctionsTable()
@@ -374,15 +375,20 @@ void CAmuledGSocketFuncTable::Disable_Events(GSocket *socket)
 	Uninstall_Callback(socket, GSOCK_OUTPUT);
 }
 
+#endif	// AMULED28
+
+#ifndef __WXMSW__
+
+#ifdef AMULED28
 
 CDaemonAppTraits::CDaemonAppTraits(CAmuledGSocketFuncTable *table)
 :
 wxConsoleAppTraits(),
+m_oldSignalChildAction(),
+m_newSignalChildAction(),
 m_table(table),
 m_lock(wxMUTEX_RECURSIVE),
-m_sched_delete(),
-m_oldSignalChildAction(),
-m_newSignalChildAction()
+m_sched_delete()
 {
 	m_lock.Unlock();
 }
@@ -421,8 +427,31 @@ void CDaemonAppTraits::DeletePending()
 	//m_sched_delete.erase(m_sched_delete.begin(), m_sched_delete.end());
 }
 
+wxAppTraits *CamuleDaemonApp::CreateTraits()
+{
+	return new CDaemonAppTraits(m_table);
+}
 
-#ifdef __WXMAC__
+#else	// AMULED28
+
+CDaemonAppTraits::CDaemonAppTraits()
+:
+wxConsoleAppTraits(),
+m_oldSignalChildAction(),
+m_newSignalChildAction()
+{
+}
+
+wxAppTraits *CamuleDaemonApp::CreateTraits()
+{
+	return new CDaemonAppTraits();
+}
+
+#endif	// !AMULED28
+
+#endif	// __WXMSW__
+
+#if defined(__WXMAC__) && !wxCHECK_VERSION(2, 9, 0)
 #include <wx/stdpaths.h> // Do_not_auto_remove (guess)
 static wxStandardPathsCF gs_stdPaths;
 wxStandardPathsBase& CDaemonAppTraits::GetStandardPaths()
@@ -432,6 +461,8 @@ wxStandardPathsBase& CDaemonAppTraits::GetStandardPaths()
 #endif
 
 
+#ifdef AMULED28
+
 CamuleDaemonApp::CamuleDaemonApp()
 :
 m_Exit(false),
@@ -440,11 +471,7 @@ m_table(new CAmuledGSocketFuncTable())
 	wxPendingEventsLocker = new wxCriticalSection;
 }
 
-
-wxAppTraits *CamuleDaemonApp::CreateTraits()
-{
-	return new CDaemonAppTraits(m_table);
-}
+#endif	// !AMULED28
 
 
 #ifndef __WXMSW__
@@ -591,25 +618,10 @@ pid_t AmuleWaitPid(pid_t pid, int *status, int options, wxString *msg)
 int CamuleDaemonApp::OnRun()
 {
 	if (!thePrefs::AcceptExternalConnections()) {
-		wxString warning = _("ERROR: aMule daemon cannot be used when external connections are disabled. "
-			"To enable External Connections, use either a normal aMule, start amuled with the option --ec-config or set the key"
-			"\"AcceptExternalConnections\" to 1 in the file ~/.aMule/amule.conf");
-		
-		AddLogLineM(true, warning);
-		printf("\n%s\n\n", (const char*)unicode2char(warning));
-		
+		AddLogLineMS(true, _("ERROR: aMule daemon cannot be used when external connections are disabled. To enable External Connections, use either a normal aMule, start amuled with the option --ec-config or set the key \"AcceptExternalConnections\" to 1 in the file ~/.aMule/amule.conf"));
 		return 0;
 	} else if (thePrefs::ECPassword().IsEmpty()) {
-		wxString warning = wxT("ERROR: A valid password is required to use "
-			"external connections, and aMule daemon cannot be used without "
-			"external connections. To run aMule deamon, you must set the "
-			"\"ECPassword\" field in the file ~/.aMule/amule.conf with an "
-			"appropriate value. Execute amuled with the flag --ec-config to set the password. More information can be found at "
-			"http://wiki.amule.org");
-	
-		AddLogLineM(true, warning);
-		printf("\n%s\n\n", (const char*)unicode2char(warning));
-		
+		AddLogLineMS(true, _("ERROR: A valid password is required to use external connections, and aMule daemon cannot be used without external connections. To run aMule deamon, you must set the \"ECPassword\" field in the file ~/.aMule/amule.conf with an appropriate value. Execute amuled with the flag --ec-config to set the password. More information can be found at http://wiki.amule.org"));
 		return 0;
 	}
 
@@ -644,6 +656,8 @@ int CamuleDaemonApp::OnRun()
 	}
 #endif // __WXMSW__
 	
+#ifdef AMULED28
+
 	while ( !m_Exit ) {
 		m_table->RunSelect();
 		ProcessPendingEvents();
@@ -653,31 +667,25 @@ int CamuleDaemonApp::OnRun()
 	// ShutDown is beeing called twice. Once here and again in OnExit().
 	ShutDown();
 
-#ifndef __WXMSW__
-	msg.Empty();
-	ret = sigaction(SIGCHLD, &m_oldSignalChildAction, NULL);
-	if (ret == -1) {
-		strerror_r(errno, errorBuffer, ERROR_BUFFER_LEN);
-		msg << wxT("CamuleDaemonApp::OnRun(): second sigaction() failed: ") <<
-			char2unicode(errorBuffer) <<
-			wxT(".");
-		AddLogLineM(true, msg);
-	} else {
-		msg << wxT("CamuleDaemonApp::OnRun(): Uninstallation of SIGCHLD "
-			"callback with sigaction() succeeded.");
-		AddDebugLogLineM(false, logGeneral, msg);
-	}
-#endif // __WXMSW__
-
 	return 0;
+
+#else
+
+#ifdef AMULED_DUMMY
+	return 0;
+#else
+	return wxApp::OnRun();
+#endif
+
+#endif
 }
 
 bool CamuleDaemonApp::OnInit()
 {
-	printf("amuled: OnInit - starting timer\n");
 	if ( !CamuleApp::OnInit() ) {
 		return false;
 	}
+	AddLogLineNS(_("amuled: OnInit - starting timer"));
 	core_timer = new CTimer(this,ID_CORE_TIMER_EVENT);
 	core_timer->Start(CORE_TIMER_PERIOD);
 	glob_prefs->GetCategory(0)->title = GetCatTitle(thePrefs::GetAllcatType());
@@ -692,25 +700,40 @@ int CamuleDaemonApp::InitGui(bool ,wxString &)
 	if ( !enable_daemon_fork ) {
 		return 0;
 	}
-	printf("amuled: forking to background - see you\n");
+	AddLogLineNS(_("amuled: forking to background - see you"));
+	theLogger.SetEnabledStdoutLog(false);
 	//
-	// fork to background and detouch from controlling tty
+	// fork to background and detach from controlling tty
 	// while redirecting stdout to /dev/null
 	//
 	for(int i_fd = 0;i_fd < 3; i_fd++) {
 		close(i_fd);
 	}
   	int fd = open("/dev/null",O_RDWR);
-  	dup(fd);
-  	dup(fd);
-  	int pid = fork();
+	if (dup(fd)){}	// prevent GCC warning
+	if (dup(fd)){}
+  	pid_t pid = fork();
 
 	wxASSERT(pid != -1);
 
   	if ( pid ) {
   		exit(0);
   	} else {
-		setsid();
+		pid = setsid();
+		//
+		// Create a Pid file with the Pid of the Child, so any daemon-manager
+		// can easily manage the process
+		//
+		if (!m_PidFile.IsEmpty()) {
+			wxString temp = wxString::Format(wxT("%d\n"), pid);
+			wxFFile ff(m_PidFile, wxT("w"));
+			if (!ff.Error()) {
+				ff.Write(temp);
+				ff.Close();
+			} else {
+				AddLogLineNS(_("Cannot Create Pid File"));
+			}
+		}
   	}
   	
 #endif
@@ -720,6 +743,7 @@ int CamuleDaemonApp::InitGui(bool ,wxString &)
 
 int CamuleDaemonApp::OnExit()
 {
+#ifdef AMULED28
 	/*
 	 * Stop all socket threads before entering
 	 * shutdown sequence.
@@ -730,8 +754,27 @@ int CamuleDaemonApp::OnExit()
 		delete clientudp;
 		clientudp = NULL;
 	}
-	
+#endif
+
 	ShutDown();
+
+#ifndef __WXMSW__
+	const int ERROR_BUFFER_LEN = 256;
+	char errorBuffer[ERROR_BUFFER_LEN];
+	wxString msg;
+	int ret = sigaction(SIGCHLD, &m_oldSignalChildAction, NULL);
+	if (ret == -1) {
+		strerror_r(errno, errorBuffer, ERROR_BUFFER_LEN);
+		msg << wxT("CamuleDaemonApp::OnRun(): second sigaction() failed: ") <<
+			char2unicode(errorBuffer) <<
+			wxT(".");
+		AddLogLineM(true, msg);
+	} else {
+		msg << wxT("CamuleDaemonApp::OnRun(): Uninstallation of SIGCHLD "
+			"callback with sigaction() succeeded.");
+		AddDebugLogLineM(false, logGeneral, msg);
+	}
+#endif // __WXMSW__
 	
 	// lfroen: delete socket threads
 	if (ECServerHandler) {
@@ -744,24 +787,14 @@ int CamuleDaemonApp::OnExit()
 }
 
 
-void CamuleDaemonApp::ShowAlert(wxString msg, wxString title, int flags)
+int CamuleDaemonApp::ShowAlert(wxString msg, wxString title, int flags)
 {
 	if ( flags | wxICON_ERROR ) {
 		title = CFormat(_("ERROR: %s")) % title;
 	}
-	
-	// Ensure that alerts are always visible on the console (when possible).
-	if ((not enable_stdout_log) and (not enable_daemon_fork)) {
-		printf("%s\n", unicode2UTF8(title + wxT(" ") + msg).data());
-	}
-	
-	AddLogLineM(true, title + wxT(" ") + msg);
-}
+	AddLogLineCS(title + wxT(" ") + msg);
 
-
-void CamuleDaemonApp::OnLoggingEvent(CLoggingEvent& evt)
-{
-	CamuleApp::AddLogLine(evt.Message());
+	return 0;	// That's neither yes nor no, ok, cancel
 }
 
 // File_checked_for_headers

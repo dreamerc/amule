@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -93,6 +93,9 @@ bool CDirIterator::HasSubDirs(const wxString& spec)
 EFileType GuessFiletype(const wxString& file)
 {
 	wxFile archive(file, wxFile::read);
+	if (!archive.IsOpened()) {
+		return EFT_Error;
+	}
 	char head[10] = {0};
 	int read = archive.Read(head, std::min<off_t>(10, archive.Length()));
 
@@ -130,7 +133,7 @@ bool UnpackZipFile(const wxString& file, const wxChar* files[])
 	wxZipFSHandler archive; 
 	wxString filename = archive.FindFirst(
 		wxT("file:") + file + wxT("#zip:/*"), wxFILE);
-
+	
 	wxTempFile target(file);
 
 	while (!filename.IsEmpty() && !target.Length()) {
@@ -152,15 +155,16 @@ bool UnpackZipFile(const wxString& file, const wxChar* files[])
 						while (!zip.Eof()) {
 							zip.Read(buffer, sizeof(buffer));
 							target.Write(buffer, zip.LastRead());
-						}
+						}						
 						break;
 					}
 				}
 			}
 		}
+
 		filename = archive.FindNext();
 	}
-
+	
 	if (target.Length()) {
 		target.Commit();
 		return true;
@@ -257,7 +261,7 @@ UnpackResult UnpackArchive(const CPath& path, const wxChar* files[])
 				// Unpack nested archives if needed.
 				return UnpackResult(true, UnpackArchive(path, files).second);
 			} else {
-				return UnpackResult(false, EFT_Zip);
+				return UnpackResult(false, EFT_Error);
 			}
 
 		case EFT_GZip:
@@ -265,7 +269,7 @@ UnpackResult UnpackArchive(const CPath& path, const wxChar* files[])
 				// Unpack nested archives if needed.
 				return UnpackResult(true, UnpackArchive(path, files).second);
 			} else {
-				return UnpackResult(false, EFT_GZip);
+				return UnpackResult(false, EFT_Error);
 			}
 
 		default:

@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -125,11 +125,7 @@ CServer::CServer(CServer* pOld)
 
 CServer::~CServer()
 {
-	TagPtrList::iterator it = m_taglist.begin();
-	for ( ; it != m_taglist.end(); ++it ) {
-		delete *it;
-	}
-
+	deleteTagPtrListEntries(&m_taglist);
 	m_taglist.clear();
 }
 
@@ -238,7 +234,7 @@ bool CServer::AddTagFromFile(CFileDataIO* servermet)
 		} else if (tag.IsInt()) {
 			m_strVersion = wxString::Format(wxT("%u.%u"), tag.GetInt() >> 16, tag.GetInt() & 0xFFFF);
 		} else {
-			wxASSERT(0);
+			wxFAIL;
 		}
 		break;
 		
@@ -284,7 +280,7 @@ bool CServer::AddTagFromFile(CFileDataIO* servermet)
 				users = tag.GetInt();
 			}
 		} else {
-			wxASSERT(0);
+			wxFAIL;
 		}
 	}
 	
@@ -326,7 +322,7 @@ void CServer::SetLastDescPingedCount(bool bReset)
 
 uint32 CServer::GetServerKeyUDP(bool bForce) const
 {
-	if (m_dwIPServerKeyUDP != 0 && m_dwIPServerKeyUDP == theApp->GetPublicIP() || bForce) {
+	if ((m_dwIPServerKeyUDP != 0 && m_dwIPServerKeyUDP == theApp->GetPublicIP()) || bForce) {
 		return m_dwServerKeyUDP;
 	} else {
 		return 0;

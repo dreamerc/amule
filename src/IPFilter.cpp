@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -38,6 +38,7 @@
 #include "ThreadScheduler.h"		// Needed for CThreadScheduler and CThreadTask
 #include "ClientList.h"			// Needed for CClientList
 #include "ServerList.h"			// Needed for CServerList
+#include <common/Macros.h>		// Needed for DEBUG_ONLY()
 
 
 ////////////////////////////////////////////////////////////
@@ -91,6 +92,7 @@ class CIPFilterTask : public CThreadTask
 public:
 	CIPFilterTask(wxEvtHandler* owner)
 		: CThreadTask(wxT("Load IPFilter"), wxEmptyString, ETP_Critical),
+		  m_storeDescriptions(false),
 		  m_owner(owner)
 	{
 	}
@@ -120,6 +122,7 @@ public:
 	}
 private:
 
+	bool m_storeDescriptions;
 	
 	/**
 	 * Helper function.
@@ -134,14 +137,16 @@ private:
 	 * ranges where the AccessLevel is not within the range 0..255, or
 	 * where IPEnd < IPstart not inserted.
 	 */	
-	bool AddIPRange(uint32 IPStart, uint32 IPEnd, uint16 AccessLevel, const wxString& Description)
+	bool AddIPRange(uint32 IPStart, uint32 IPEnd, uint16 AccessLevel, const wxString& DEBUG_ONLY(Description))
 	{
 		if (AccessLevel < 256) {
 			if (IPStart <= IPEnd) {
 				CIPFilter::rangeObject item;
 				item.AccessLevel = AccessLevel;
 #ifdef __DEBUG__
-				item.Description = Description;
+				if (m_storeDescriptions) {
+					item.Description = Description;
+				}
 #endif
 
 				m_result.insert(IPStart, IPEnd, item);
@@ -272,6 +277,10 @@ private:
 			return 0;
 		}
 
+#ifdef __DEBUG__
+		m_storeDescriptions = theLogger.IsEnabled(logIPFilter);
+#endif
+
 		const wxChar* ipfilter_files[] = {
 			wxT("ipfilter.dat"),
 			wxT("guardian.p2p"),
@@ -280,6 +289,7 @@ private:
 		};
 		
 		// Try to unpack the file, might be an archive
+
 		if (UnpackArchive(path, ipfilter_files).second != EFT_Text) {
 			AddLogLineM(true, 
 				CFormat(_("Failed to load ipfilter.dat file '%s', unknown format encountered.")) % file);
@@ -316,14 +326,12 @@ private:
 					
 					if (!line.IsEmpty() && !line.StartsWith(wxT("#"))) {
 						discardedCount++;
-						AddDebugLogLineM(false, logIPFilter, wxT(
-							"Invalid line found while reading ipfilter file: ") + line);
+						AddDebugLogLineM(false, logIPFilter, wxT("Invalid line found while reading ipfilter file: ") + line);
 					}
 				}
 			}
 		} else {
-			AddLogLineM(true, CFormat(_(
-				"Failed to load ipfilter.dat file '%s', could not open file.")) % file);
+			AddLogLineM(true, CFormat(_("Failed to load ipfilter.dat file '%s', could not open file.")) % file);
 			return 0;
 		}
 
@@ -337,7 +345,7 @@ private:
 	}
 	
 private:
-	wxEvtHandler*		m_owner;	
+	wxEvtHandler*		m_owner;
 	CIPFilter::IPMap	m_result;
 };
 
@@ -450,8 +458,10 @@ bool CIPFilter::IsFiltered(uint32 IPTest, bool isServer)
 void CIPFilter::Update(const wxString& strURL)
 {
 	if (!strURL.IsEmpty()) {
+		m_URL = strURL;
+
 		wxString filename = theApp->ConfigDir + wxT("ipfilter.download");
-		CHTTPDownloadThread *downloader = new CHTTPDownloadThread(strURL, filename, HTTP_IPFilter);
+		CHTTPDownloadThread *downloader = new CHTTPDownloadThread(m_URL, filename, theApp->ConfigDir + wxT("ipfilter.dat"), HTTP_IPFilter);
 
 		downloader->Create();
 		downloader->Run();
@@ -461,30 +471,30 @@ void CIPFilter::Update(const wxString& strURL)
 
 void CIPFilter::DownloadFinished(uint32 result)
 {
-	if (result == 1) {
+	if (result == HTTP_Success) {
 		// download succeeded. proceed with ipfilter loading
 		wxString newDat = theApp->ConfigDir + wxT("ipfilter.download");
 		wxString oldDat = theApp->ConfigDir + wxT("ipfilter.dat");
 
 		if (wxFileExists(oldDat)) {
 			if (!wxRemoveFile(oldDat)) {
-				AddDebugLogLineM(true, logIPFilter,
-					wxT("Failed to remove ipfilter.dat file, aborting update."));
+				AddLogLineC(CFormat(_("Failed to remove %s file, aborting update.")) % wxT("ipfilter.dat"));
 				return;
 			}
 		}
 
 		if (!wxRenameFile(newDat, oldDat)) {
-			AddDebugLogLineM(true, logIPFilter,
-				wxT("Failed to rename new ipfilter.dat file, aborting update."));
+			AddLogLineC(CFormat(_("Failed to rename new %s file, aborting update.")) % wxT("ipfilter.dat"));
 			return;
 		}
 
 		// Reload both ipfilter files
 		Reload();
+		AddLogLineN(CFormat(_("Successfully updated %s")) % wxT("ipfilter.dat"));
+	} else if (result == HTTP_Skipped) {
+		AddLogLineN(CFormat(_("Skipped download of %s, because requested file is not newer.")) % wxT("ipfilter.dat"));
 	} else {
-		AddDebugLogLineM(true, logIPFilter,
-			wxT("Failed to download the ipfilter from ") + thePrefs::IPFilterURL());
+		AddLogLineC(CFormat(_("Failed to download %s from %s")) % wxT("ipfilter.dat") % m_URL);
 	}
 }
 

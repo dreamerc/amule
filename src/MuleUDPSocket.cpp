@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (C) 2005-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2005-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -169,12 +169,11 @@ void CMuleUDPSocket::OnReceive(int errorCode)
 		// 2 bytes (protocol and opcode) is the smallets possible packet.
 		AddDebugLogLineM(false, logMuleUDP, m_name + wxT(": Invalid Packet received"));
 	} else if (!ip) {
-		// wxASSERT(0);
-		printf("Unknown ip receiving on UDP packet! Ignoring: '%s'\n",
-			(const char*)unicode2char(addr.IPAddress()));
+		// wxFAIL;
+		AddLogLineNS(wxT("Unknown ip receiving a UDP packet! Ignoring: '") + addr.IPAddress() + wxT("'"));
 	} else if (!port) {
-		// wxASSERT(0);
-		printf("Unknown port receiving an UDP packet! Ignoring\n");
+		// wxFAIL;
+		AddLogLineNS(wxT("Unknown port receiving a UDP packet! Ignoring"));
 	} else if (theApp->clientlist->IsBannedClient(ip)) {
 		AddDebugLogLineM(false, logMuleUDP, m_name + wxT(": Dropped packet from banned IP ") + addr.IPAddress());
 	} else {
@@ -220,17 +219,15 @@ void CMuleUDPSocket::SendPacket(CPacket* packet, uint32 IP, uint16 port, bool bE
 	}
 	
 	if (!Ok()) {
-		AddDebugLogLineM(false, logMuleUDP, (m_name + wxT(": Packet discarded (socket not Ok): ")) 
-			<< Uint32toStringIP(IP) << wxT(":") << port << wxT(" ") << packet->GetPacketSize()
-			<< wxT("b"));
+		AddDebugLogLineM(false, logMuleUDP, (m_name + wxT(": Packet discarded, socket not Ok (")) 
+			<< Uint32_16toStringIP_Port(IP, port) << wxT("): ") << packet->GetPacketSize() << wxT("b"));
 		delete packet;
 
 		return;
 	}
 	
-	AddDebugLogLineM(false, logMuleUDP, (m_name + wxT(": Packet queued: ")) 
-		<< Uint32toStringIP(IP) << wxT(":") << port << wxT(" ") 
-		<< packet->GetPacketSize() << wxT("b"));
+	AddDebugLogLineM(false, logMuleUDP, (m_name + wxT(": Packet queued (")) 
+		<< Uint32_16toStringIP_Port(IP, port) << wxT("): ") << packet->GetPacketSize() << wxT("b"));
 	
 	UDPPack newpending;
 	newpending.IP = IP;
@@ -331,13 +328,14 @@ bool CMuleUDPSocket::SendTo(uint8_t *buffer, uint32_t length, uint32_t ip, uint1
 		} else {
 			// An error which we can't handle happended, so we drop 
 			// the packet rather than risk entering an infinite loop.
-			printf("WARNING! %s discarded packet due to errors (%i) while sending.\n",
-				(const char*)unicode2char(m_name), error);
+			AddLogLineNS((wxT("WARNING! ") + m_name + wxT(": Packet to ")) 
+				<< Uint32_16toStringIP_Port(ip, port)
+				<< wxT(" discarded due to error (") << error << wxT(") while sending."));
 			sent = true;
 		}
 	} else {
-		AddDebugLogLineM(false, logMuleUDP, (m_name + wxT(": Packet sent to ")) 
-			<< ip << wxT(":") << port << wxT(": ")
+		AddDebugLogLineM(false, logMuleUDP, (m_name + wxT(": Packet sent (")) 
+			<< Uint32_16toStringIP_Port(ip, port) << wxT("): ")
 			<< length << wxT("b"));
 		sent = true;
 	}

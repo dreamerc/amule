@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -31,7 +31,6 @@
 #include <common/MenuIDs.h>
 #include <common/Constants.h>
 
-#include <wx/textfile.h>	// Needed for wxTextFile
 #include <wx/utils.h>
 
 #include "Server.h"		// Needed for CServer
@@ -53,7 +52,6 @@
 #include <common/Format.h>	// Needed for CFormat
 #include "IPFilter.h"
 #include <common/FileFunctions.h>	// Needed for CDirIterator
-#include "FileLock.h"		// Needed for CFileLock
 #include "GuiEvents.h"		// Needed for Notify_*
 #include "UserEvents.h"
 #include "MagnetURI.h"		// Needed for CMagnetED2KConverter
@@ -97,19 +95,17 @@ CDownloadQueue::~CDownloadQueue()
 {
 	if ( !m_filelist.empty() ) {
 		for ( unsigned int i = 0; i < m_filelist.size(); i++ ) {
-			printf("\rSaving PartFile %u of %u", i + 1, (unsigned int)m_filelist.size());
-			fflush(stdout);
+			AddLogLineNS(CFormat(_("Saving PartFile %u of %u")) % (i + 1) % m_filelist.size());
 			delete m_filelist[i];
 		}
-		printf("\nAll PartFiles Saved.\n");
+		AddLogLineNS(_("All PartFiles Saved."));
 	}
 }
 
 
 void CDownloadQueue::LoadMetFiles(const CPath& path)
 {
-	printf("Loading temp files from %s.\n",
-		(const char *)unicode2char(path.GetPrintable()));
+	AddLogLineNS(CFormat(_("Loading temp files from %s.")) % path.GetPrintable());
 	
 	std::vector<CPath> files;
 
@@ -128,7 +124,7 @@ void CDownloadQueue::LoadMetFiles(const CPath& path)
 
 	// Load part-files	
 	for ( size_t i = 0; i < files.size(); i++ ) {
-		printf("\rLoading PartFile %u of %u", (unsigned int)(i + 1), (unsigned int)files.size());
+		AddLogLineNS(CFormat(_("Loading PartFile %u of %u")) % (i + 1) % files.size());
 		fileName = files[i].GetFullName();
 		CPartFile *toadd = new CPartFile();
 		bool result = toadd->LoadPartFile(path, fileName) != 0;
@@ -154,16 +150,13 @@ void CDownloadQueue::LoadMetFiles(const CPath& path)
 					_("ERROR: Failed to load backup file. Search http://forum.amule.org for .part.met recovery solutions."));
 				msg << CFormat(wxT("ERROR: Failed to load PartFile '%s'")) % fileName;
 			}
-			AddDebugLogLineM(true, logPartFile, msg);
-			
-			// Newline so that the error stays visible.
-			printf(": %s\n", (const char*)unicode2char(msg));
+			AddLogLineCS(msg);
 
 			// Delete the partfile object in the end.
 			delete toadd;
 		}
 	}
-	printf("\nAll PartFiles Loaded.\n");
+	AddLogLineNS(_("All PartFiles Loaded."));
 	
 	if ( GetFileCount() == 0 ) {
 		AddLogLineM(false, _("No part files found"));
@@ -333,9 +326,13 @@ void CDownloadQueue::AddDownload(CPartFile* file, bool paused, uint8 category)
 	}
 
 	NotifyObservers( EventType( EventType::INSERTED, file ) );
-
-	file->SetCategory(category);
+	if (category < theApp->glob_prefs->GetCatCount()) {
+		file->SetCategory(category);
+	} else {
+		AddDebugLogLineM( false, logDownloadQueue, wxT("Tried to add download into invalid category.") );
+	}
 	Notify_DownloadCtrlAddFile( file );
+	theApp->searchlist->UpdateSearchFileByHash(file->GetFileHash()); 	// Update file in the search dialog if it's still open
 	AddLogLineM(true, CFormat(_("Downloading %s")) % file->GetFileName() );
 }
 
@@ -441,7 +438,7 @@ void CDownloadQueue::Process()
 	
 	// Check for new links once per second.
 	if ((::GetTickCount() - m_nLastED2KLinkCheck) >= 1000) {
-		AddLinksFromFile();
+		theApp->AddLinksFromFile();
 		m_nLastED2KLinkCheck = ::GetTickCount();
 	}
 }
@@ -469,7 +466,7 @@ CPartFile* CDownloadQueue::GetFileByIndex(unsigned int index)  const
 		return m_filelist[ index ];
 	}
 	
-	wxASSERT( false );
+	wxFAIL;
 	return NULL;
 }
 
@@ -926,7 +923,7 @@ void CDownloadQueue::ProcessLocalRequests()
 				if (cur_file->GetStatus() == PS_READY || cur_file->GetStatus() == PS_EMPTY) {
 					uint8 nPriority = cur_file->GetDownPriority();
 					if (nPriority > PR_HIGH) {
-						wxASSERT(0);
+						wxFAIL;
 						nPriority = PR_HIGH;
 					}
 
@@ -986,11 +983,11 @@ void CDownloadQueue::ProcessLocalRequests()
 		if (iSize > 0) {
 			// create one 'packet' which contains all buffered OP_GETSOURCES ED2K packets to be sent with one TCP frame
 			// server credits: (16+4)*regularfiles + (16+4+8)*largefiles +1
-			CPacket* packet = new CPacket(new byte[iSize], dataTcpFrame.GetLength(), true, false);
+			CScopedPtr<CPacket> packet(new CPacket(new byte[iSize], dataTcpFrame.GetLength(), true, false));
 			dataTcpFrame.Seek(0, wxFromStart);
 			dataTcpFrame.Read(packet->GetPacket(), iSize);
 			uint32 size = packet->GetPacketSize();
-			theApp->serverconnect->SendPacket(packet, true);	// Deletes `packet'.
+			theApp->serverconnect->SendPacket(packet.release(), true);	// Deletes `packet'.
 			AddDebugLogLineM(false, logDownloadQueue, wxT("Sent local sources request packet."));
 			theStats::AddUpOverheadServer(size);
 		}
@@ -1010,39 +1007,19 @@ void CDownloadQueue::SendLocalSrcRequest(CPartFile* sender)
 }
 
 
-void CDownloadQueue::AddLinksFromFile()
+void CDownloadQueue::ResetCatParts(uint8 cat)
 {
-	const wxString fullPath = theApp->ConfigDir + wxT("ED2KLinks");
-	if (!wxFile::Exists(fullPath)) {
-		return;
-	}
-	
-	// Attempt to lock the ED2KLinks file.
-	CFileLock lock((const char*)unicode2char(fullPath));
-
-	wxTextFile file(fullPath);
-	if ( file.Open() ) {
-		for ( unsigned int i = 0; i < file.GetLineCount(); i++ ) {
-			wxString line = file.GetLine( i ).Strip( wxString::both );
-			
-			if ( !line.IsEmpty() ) {
-				// Special case! used by a secondary running mule to raise this one.
-				if ( line == wxT("RAISE_DIALOG")  ) {
-					Notify_ShowGUI();
-					continue;
-				}
-				
-				AddLink( line );
-			}
+	for ( uint16 i = 0; i < GetFileCount(); i++ ) {
+		CPartFile* file = GetFileByIndex( i );
+		
+		if ( file->GetCategory() == cat ) {
+			// Reset the category
+			file->SetCategory( 0 );
+		} else if ( file->GetCategory() > cat ) {
+			// Set to the new position of the original category
+			file->SetCategory( file->GetCategory() - 1 );
 		}
-
-		file.Close();
-	} else {
-		printf("Failed to open ED2KLinks file.\n");
 	}
-	
-	// Delete the file.
-	wxRemoveFile(theApp->ConfigDir +  wxT("ED2KLinks"));
 }
 
 
@@ -1289,7 +1266,7 @@ void CDownloadQueue::OnHostnameResolved(uint32 ip)
 }
 
 
-bool CDownloadQueue::AddLink( const wxString& link, int category )
+bool CDownloadQueue::AddLink( const wxString& link, uint8 category )
 {
 	wxString uri(link);
 
@@ -1310,7 +1287,7 @@ bool CDownloadQueue::AddLink( const wxString& link, int category )
 }
 
 
-bool CDownloadQueue::AddED2KLink( const wxString& link, int category )
+bool CDownloadQueue::AddED2KLink( const wxString& link, uint8 category )
 {
 	wxASSERT( !link.IsEmpty() );
 	wxString URI = link;
@@ -1332,7 +1309,7 @@ bool CDownloadQueue::AddED2KLink( const wxString& link, int category )
 }
 
 
-bool CDownloadQueue::AddED2KLink( const CED2KLink* link, int category )
+bool CDownloadQueue::AddED2KLink( const CED2KLink* link, uint8 category )
 {
 	switch ( link->GetKind() ) {
 		case CED2KLink::kFile:
@@ -1351,7 +1328,7 @@ bool CDownloadQueue::AddED2KLink( const CED2KLink* link, int category )
 
 
 
-bool CDownloadQueue::AddED2KLink( const CED2KFileLink* link, int category )
+bool CDownloadQueue::AddED2KLink( const CED2KFileLink* link, uint8 category )
 {
 	CPartFile* file = NULL;
 	if (IsFileExisting(link->GetHashKey())) {

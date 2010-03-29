@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -78,7 +78,7 @@ bool CClientDetailDialog::OnInitDialog() {
 		CastChild(ID_DHASH, wxStaticText)->SetLabel(
 			m_client->GetUserHash().Encode());
 		CastChild(ID_DRATING, wxStaticText)->SetLabel(
-			wxString::Format(wxT("%.1f"), m_client->GetRating()));
+			wxString::Format(wxT("%u"), m_client->GetRating()));
 	} else {
 		CastChild(ID_DNAME, wxStaticText)->SetLabel(_("Unknown"));
 		CastChild(ID_DHASH, wxStaticText)->SetLabel(_("Unknown"));
@@ -101,7 +101,7 @@ bool CClientDetailDialog::OnInitDialog() {
 	
 	// User ID
 	CastChild(ID_DID, wxStaticText)->SetLabel(
-		CFormat(wxT("%u (%s)")) % ENDIAN_NTOHL(m_client->GetIP()) % (m_client->HasLowID() ? _("LowID") : _("HighID")));
+		CFormat(wxT("%u (%s)")) % m_client->GetUserIDHybrid() % (m_client->HasLowID() ? _("LowID") : _("HighID")));
 
 	// Client IP/Port
 	CastChild(ID_DIP, wxStaticText)->SetLabel(

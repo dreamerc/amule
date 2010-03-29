@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -286,7 +286,7 @@ void CServerList::ServerStats()
 			// if it doesn't get responsed, we don't count it as error but continue with a normal ping
 			ping_server->SetCryptPingReplyPending(true);
 			uint32 nPacketLen = 4 + (uint8)(rand() % 16); // max padding 16 bytes
-			CScopedArray<byte> pRawPacket(new byte[nPacketLen]);
+			CScopedArray<byte> pRawPacket(nPacketLen);
 			uint32 dwChallenge = (rand() << 17) | (rand() << 2) | (rand() & 0x03);
 			if (dwChallenge == 0) {
 				dwChallenge++;
@@ -330,7 +330,7 @@ void CServerList::ServerStats()
 			theStats::AddUpOverheadServer(packet->GetPacketSize());
 			theApp->serverconnect->SendUDPPacket(packet, ping_server, true);
 		} else {
-			wxASSERT( false );
+			wxFAIL;
 		}
 	}
 }
@@ -524,7 +524,7 @@ struct ServerPriorityComparator {
 			case SRV_PR_HIGH:
 				return rhs->GetPreferences() != SRV_PR_HIGH;
 			default:
-				wxASSERT(0);
+				wxFAIL;
 				return false;
 		}
 	}
@@ -613,8 +613,10 @@ CServer* CServerList::GetServerByIPUDP(uint32 nIP, uint16 nUDPPort, bool bObfusc
 {
 	for (CInternalList::const_iterator it = m_servers.begin(); it != m_servers.end(); ++it){
         CServer* const s =*it;
-		if (s->GetIP() == nIP && (s->GetPort() == nUDPPort-4 ||
-			(bObfuscationPorts && (s->GetObfuscationPortUDP() == nUDPPort) || (s->GetPort() == nUDPPort - 12))))
+		if (s->GetIP() == nIP 
+			&& (s->GetPort() == nUDPPort-4 
+				|| (bObfuscationPorts && s->GetObfuscationPortUDP() == nUDPPort) 
+				|| s->GetPort() == nUDPPort - 12))
 			return s;
 	}
 	return NULL;
@@ -784,7 +786,7 @@ void CServerList::UpdateServerMetFromURL(const wxString& strURL)
 	}
 	URLUpdate = strURL;
 	wxString strTempFilename(theApp->ConfigDir + wxT("server.met.download"));
-	CHTTPDownloadThread *downloader = new CHTTPDownloadThread(strURL,strTempFilename, HTTP_ServerMet);
+	CHTTPDownloadThread *downloader = new CHTTPDownloadThread(strURL, strTempFilename, theApp->ConfigDir + wxT("server.met"), HTTP_ServerMet);
 	downloader->Create();
 	downloader->Run();
 }
@@ -792,7 +794,7 @@ void CServerList::UpdateServerMetFromURL(const wxString& strURL)
 
 void CServerList::DownloadFinished(uint32 result) 
 {
-	if(result == 1) {
+	if(result == HTTP_Success) {
 		const CPath tempFilename = CPath(theApp->ConfigDir + wxT("server.met.download"));
 
 		// curl succeeded. proceed with server.met loading
@@ -801,10 +803,11 @@ void CServerList::DownloadFinished(uint32 result)
 
 		// So, file is loaded and merged, and also saved
 		CPath::RemoveFile(tempFilename);
-		AddLogLineM(true, CFormat(
-			_("Finished to download the server list from %s")) % URLUpdate);
+		AddLogLineN(CFormat(_("Finished downloading the server list from %s")) % URLUpdate);
+	} else if (result == HTTP_Skipped) {
+		AddLogLineN(CFormat(_("Skipped download of %s, because requested file is not newer.")) % wxT("server.met"));
 	} else {
-		AddLogLineM(true, CFormat( _("Failed to download the server list from %s") ) % URLUpdate);
+		AddLogLineC(CFormat(_("Failed to download %s from %s")) % wxT("server.met") % URLUpdate);
 	}
 }
 
@@ -830,7 +833,7 @@ void CServerList::AutoUpdate()
 			AddLogLineM(true, CFormat(
 				_("Start downloading server list from %s")) % URI);
 			CHTTPDownloadThread *downloader = new CHTTPDownloadThread(
-				URI, strTempFilename, HTTP_ServerMetAuto);
+				URI, strTempFilename, theApp->ConfigDir + wxT("server.met"), HTTP_ServerMetAuto);
 			downloader->Create();
 			downloader->Run();
 		

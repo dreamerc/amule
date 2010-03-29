@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 // Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
@@ -27,6 +27,7 @@
 #define DOWNLOADLISTCTRL_H
 
 #include <map>				// Needed for std::multimap
+#include <wx/brush.h>
 
 #include "Types.h"			// Needed for uint8
 #include "Constants.h"		// Needed for DownloadItemType
@@ -171,14 +172,13 @@ public:
 	 */
 	void ClearCompleted();
 
-	/**
-	 * Adjust category of all files when cat is deleted.
-	 */
-	void ResetCatParts(uint8 cat);
+protected:
+	/// Return old column order.
+	wxString GetOldColumnOrder() const;
 
 private:
 	/**
-	 * Updates the displayed number representing the ammount of files currently shown.
+	 * Updates the displayed number representing the amount of files currently shown.
 	 */
 	void ShowFilesCount( int diff );
 
@@ -280,10 +280,10 @@ private:
 	
 	//! Pointer to the current menu object, used to avoid multiple menus.
 	wxMenu*		m_menu;
-	//! Pointer to a cached brush object.
-	wxBrush*	m_hilightBrush;
-	//! Pointer to a cached brush object.
-	wxBrush*	m_hilightUnfocusBrush;
+	//! Cached brush object.
+	wxBrush	m_hilightBrush;
+	//! Cached brush object.
+	wxBrush	m_hilightUnfocusBrush;
 	
 	
 	//! The currently displayed category
@@ -296,6 +296,23 @@ private:
 	int m_filecount;
 
 	DECLARE_EVENT_TABLE()
+
+	enum ColumnEnum {
+		ColumnPart = 0,
+		ColumnFileName,
+		ColumnSize,
+		ColumnTransferred,
+		ColumnCompleted,
+		ColumnSpeed,
+		ColumnProgress,
+		ColumnSources,
+		ColumnPriority,
+		ColumnStatus,
+		ColumnTimeRemaining,
+		ColumnLastSeenComplete,
+		ColumnLastReception,
+		ColumnNumberOfColumns
+	};
 };
 
 #endif

@@ -1,9 +1,9 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
-// Copyright (C) 2005-2009 DÈvai Tam·s ( gonosztopi@amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2005-2008 D√©vai Tam√°s ( gonosztopi@amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -62,7 +62,7 @@ typedef struct HistoryRecord {
 } HR;
 
 
-#ifndef EC_REMOTE
+#ifndef CLIENT_GUI
 
 /**
  * Counts precise rate/average on added bytes/values.
@@ -470,7 +470,7 @@ class CStatistics {
 	static uint16 s_kadNodesCur;
 };
 
-#else /* EC_REMOTE == CLIENT_GUI */
+#else /* CLIENT_GUI */
 
 class CECPacket;
 class CRemoteConnect;
@@ -486,6 +486,15 @@ enum StatDataIndex {
 	sdKadUsers,
 	sdED2KFiles,
 	sdKadFiles,
+	sdKadFirewalledUDP,
+	sdKadIndexedSources,
+	sdKadIndexedKeywords,
+	sdKadIndexedNotes,
+	sdKadIndexedLoad,
+	sdKadIPAdress,
+	sdBuddyStatus,
+	sdBuddyIP,
+	sdBuddyPort,
 
 	sdTotalItems
 };
@@ -525,6 +534,16 @@ private:
 	static	uint32	GetED2KFiles()			{ return s_statData[sdED2KFiles]; }
 	static	uint32	GetKadFiles() 			{ return s_statData[sdKadFiles]; }
 
+	static	bool	IsFirewalledKadUDP()	{ return s_statData[sdKadFirewalledUDP] != 0; }
+	static	uint32	GetKadIndexedSources()	{ return s_statData[sdKadIndexedSources]; }
+	static	uint32	GetKadIndexedKeywords()	{ return s_statData[sdKadIndexedKeywords]; }
+	static	uint32	GetKadIndexedNotes()	{ return s_statData[sdKadIndexedNotes]; }
+	static	uint32	GetKadIndexedLoad()		{ return s_statData[sdKadIndexedLoad]; }
+	static	uint32	GetKadIPAdress()		{ return s_statData[sdKadIPAdress]; }
+	static	uint8	GetBuddyStatus()		{ return s_statData[sdBuddyStatus]; }
+	static	uint32	GetBuddyIP()			{ return s_statData[sdBuddyIP]; }
+	static	uint32	GetBuddyPort()			{ return s_statData[sdBuddyPort]; }
+
 	static	void	UpdateStats(const CECPacket* stats);
 
 		void	UpdateStatsTree();
@@ -534,7 +553,7 @@ private:
 	static	CStatTreeItemBase*	GetTreeRoot()		{ return s_statTree; }
 };
 
-#endif /* !EC_REMOTE / EC_REMOTE */
+#endif /* !CLIENT_GUI / CLIENT_GUI */
 
 
 /**

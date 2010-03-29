@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2004-2009 Angel Vidal Veiga - Kry (kry@amule.org)
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2004-2008 Angel Vidal ( kry@amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -76,7 +76,7 @@ enum EUtf8Str
 typedef const wxWX2MBbuf Unicode2CharBuf;
 typedef const wxMB2WXbuf Char2UnicodeBuf;
 
-inline Unicode2CharBuf unicode2char(const wxChar* x)	{ return wxConvLocal.cWX2MB(x); }
+Unicode2CharBuf unicode2char(const wxChar* x);
 inline Char2UnicodeBuf char2unicode(const char* x)	{ return wxConvLocal.cMB2WX(x); }
 
 inline Unicode2CharBuf unicode2UTF8(const wxChar* x)	{ return wxConvUTF8.cWX2MB(x); }
@@ -121,24 +121,45 @@ inline char* nstrdup(const char* src)
 // Replacements for atoi and atol that removes the need for converting
 // a string to normal chars with unicode2char. The value returned is the
 // value represented in the string or 0 if the conversion failed.
-inline long StrToLong( const wxString& str ) {
+inline long StrToLong(const wxString& str)
+{
 	long value = 0;
-	str.ToLong( &value );
+	if (!str.ToLong(&value)) {	// value may be changed even if it failes according to wx docu
+		value = 0;
+	}
 	return value;
 }
 
-inline unsigned long StrToULong( const wxString& str ) {
+inline unsigned long StrToULong(const wxString& str)
+{
 	unsigned long value = 0;
-	str.ToULong( &value );
+	if (!str.ToULong(&value)) {
+		value = 0;
+	}
 	return value;
 }
 
-inline unsigned long long StrToULongLong( const wxString& str ) {
+inline unsigned long long StrToULongLong(const wxString& str)
+{
+#if wxCHECK_VERSION(2, 9, 0)
+	unsigned long long value = 0;
+	if (!str.ToULongLong(&value)) {
+		value = 0;
+	}
+	return value;
+
+#else	// wx 2.8
+
+	Unicode2CharBuf buf = unicode2char(str);
+	if (!buf) {		// something went wrong
+		return 0;
+	}
 #ifdef _MSC_VER
-	return _atoi64(unicode2char(str));
+	return _atoi64(buf);
 #else
-	return atoll(unicode2char(str));
+	return atoll(buf);
 #endif
+#endif	// wx 2.8
 }
 
 inline size_t GetRawSize(const wxString& rstr, EUtf8Str eEncode)

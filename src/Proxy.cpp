@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2004-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2004-2009 Marcelo Jimenez ( phoenix@amule.org )
+// Copyright (c) 2004-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2004-2008 Marcelo Roberto Jimenez ( phoenix@amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -175,7 +175,7 @@ bool CProxyStateMachine::Start(const wxIPaddress &peerAddress, wxSocketClient *p
 	} catch (const std::bad_cast& WXUNUSED(e)) {
 		// Should process other types of wxIPAddres before quitting
 		AddDebugLogLineM(false, logProxy, wxT("(1)bad_cast exception!"));
-		wxASSERT(false);
+		wxFAIL;
 		return false;
 	}
 	
@@ -255,7 +255,7 @@ void CProxyStateMachine::ReactivateSocket()
 	// If that is not true, we are in serious trouble...
 	wxASSERT(s);
 	if (CDatagramSocketProxy *udp = s->GetUDPSocket()) {
-		// The original socket was an UDP socket
+		// The original socket was a UDP socket
 		if(m_ok) {
 			// From now on, the UDP socket can be used,
 			// remove the protection.
@@ -1070,7 +1070,7 @@ void CHttpStateMachine::process_send_command_request(bool entry)
 		if (m_proxyData.m_enablePassword) {
 			userPass = m_proxyData.m_userName + wxT(":") + m_proxyData.m_password;
 			userPassEncoded =
-				EncodeBase64(unicode2char(userPass), PROXY_BUFFER_SIZE);
+				EncodeBase64(unicode2char(userPass), userPass.Length());
 		}
 		wxString msg;
 		
@@ -1083,9 +1083,8 @@ void CHttpStateMachine::process_send_command_request(bool entry)
 				msg << 
 				wxT("Authorization: Basic ")       << userPassEncoded << wxT("\r\n") <<
 				wxT("Proxy-Authorization: Basic ") << userPassEncoded << wxT("\r\n");
-			} else {
-				msg << wxT("\r\n");
 			}
+			msg << wxT("\r\n");
 			break;
 			
 		case PROXY_CMD_BIND:
@@ -1377,7 +1376,7 @@ wxDatagramSocket &CDatagramSocketProxy::RecvFrom(
 				} catch (const std::bad_cast& WXUNUSED(e)) {
 					AddDebugLogLineM(false, logProxy,
 						wxT("(2)bad_cast exception!"));
-					wxASSERT(false);
+					wxFAIL;
 				}
 			}
 				break;

@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (C) 2005-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2005-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -92,6 +92,15 @@ public:
 	 * @param str The format-string to be used.
 	 */
 	CFormat(const wxChar* str);
+
+	/**
+	 * Constructor.
+	 * This form is required to construct from a plain char * 
+	 * with wx 2.9
+	 *
+	 * @param str The format-string to be used.
+	 */
+	CFormat(const wxString& str);
 
 	/**
 	 * Returns true if the resulting string is ready for use.
@@ -228,6 +237,11 @@ inline CFormat& CFormat::operator%(const CPrintable& value)
 	return *this % value.GetPrintableString();
 }
 
+#if wxCHECK_VERSION(2, 9, 0)
+#define WXLONGLONGFMTSPEC wxT(wxLongLongFmtSpec)
+#else
+#define WXLONGLONGFMTSPEC wxLongLongFmtSpec
+#endif
 
 #endif
 // File_checked_for_headers

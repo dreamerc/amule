@@ -1,8 +1,9 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Tiku & Hetfield ( hetfield@amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Timo Kujala ( tiku@users.sourceforge.net )
+// Copyright (c) 2002-2008 Patrizio Bassi ( hetfield@amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -26,19 +27,25 @@
 #ifndef HTTPDOWNLOAD_H
 #define HTTPDOWNLOAD_H
 
-#include "GuiEvents.h"	// Needed for HTTP_Download_File
-#include "MuleThread.h"	// Needed for CMuleThread
+#include "GuiEvents.h"		// Needed for HTTP_Download_File
+#include "MuleThread.h"		// Needed for CMuleThread
+#include <wx/datetime.h>	// Needed for wxDateTime
 
 class wxEvtHandler;
 class wxHTTP;
 class wxInputStream;
 
+enum HTTPDownloadResult {
+	HTTP_Success = 0,
+	HTTP_Error,
+	HTTP_Skipped
+};
 
 class CHTTPDownloadThread : public CMuleThread
 {
 public:
-	/** Note: wxChar* is used to circument the thread-unsafe wxString reference counting. */
-	CHTTPDownloadThread(const wxChar* url, const wxChar* filename, HTTP_Download_File file_id, bool showDialog = true);
+	/** Note: wxChar* is used to circumvent the thread-unsafe wxString reference counting. */
+	CHTTPDownloadThread(const wxChar* url, const wxChar* filename, const wxChar* oldfilename, HTTP_Download_File file_id, bool showDialog = true);
 
 private:
 	ExitCode		Entry();
@@ -46,11 +53,16 @@ private:
 
 	wxString		m_url;
 	wxString		m_tempfile;
+	bool			m_hasdate;	//! Flag whether the last modified date is known
+	wxDateTime		m_lastmodified;	//! Date on which the file being updated was last modified.
 	int			m_result;
+	int			m_response;	//! HTTP response code (e.g. 200)
+	int			m_error;	//! Additional error code (@see wxProtocol class)
 	HTTP_Download_File	m_file_id;
 	wxEvtHandler*		m_companion;
 
 	wxInputStream* GetInputStream(wxHTTP** url_handler, const wxString& location, bool proxy);
+	static wxString FormatDateHTTP(const wxDateTime& date);
 };
 
 #endif // HTTPDOWNLOAD_H

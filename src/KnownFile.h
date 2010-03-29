@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -35,6 +35,7 @@
 #include <common/Path.h>
 
 #include "kademlia/kademlia/Indexed.h"
+#include <ec/cpp/ECID.h>	// Needed for CECID
 
 
 #ifdef CLIENT_GUI
@@ -185,13 +186,15 @@ private:
 
 
 class CSearchFile;
+class CFile;
 
 
-class CKnownFile : public CAbstractFile
+class CKnownFile : public CAbstractFile, public CECID
 {
 friend class CHashingTask;
 public:
 	CKnownFile();
+	CKnownFile(uint32 ecid);
 	explicit CKnownFile(const CSearchFile &searchFile);
 
 	virtual ~CKnownFile();
@@ -220,6 +223,9 @@ public:
 	// nr. of 9MB parts according the file size wrt ED2K protocol (OP_FILESTATUS)
 	inline uint16 GetED2KPartCount() const { return m_iED2KPartCount; }
 	
+	// size of a certain part, last is different, all others are PARTSIZE
+	uint32 GetPartSize(uint16 part) const { return part == m_iPartCount - 1 ? m_sizeLastPart : PARTSIZE; }
+
 	// file upload priority
 	uint8	GetUpPriority()	 const		{return m_iUpPriority;}
 	void	SetUpPriority(uint8 newUpPriority, bool bSave=true);
@@ -311,6 +317,9 @@ public:
 	CKnownFile(CEC_SharedFile_Tag *);
 	friend class CSharedFilesRem;
 
+private:
+	uint8 m_iUpPriorityEC;
+
 protected:
 	//! The AICH master-hash, if it is known.
 	wxString	m_AICHMasterHash;
@@ -331,13 +340,14 @@ protected:
 	ArrayOfCMD4Hash m_hashlist;
 	CPath	m_filePath;	
 
-	static void CreateHashFromFile(CFileDataIO* file, uint32 Length, CMD4Hash* Output, CAICHHashTree* pShaHashOut);
+	static void CreateHashFromFile(class CFileAutoClose& file, uint64 offset, uint32 Length, CMD4Hash* Output, CAICHHashTree* pShaHashOut);
 	static void CreateHashFromInput(const byte* input, uint32 Length, CMD4Hash* Output, CAICHHashTree* pShaHashOut);
 
 	bool	m_bCommentLoaded;
 	uint16	m_iPartCount;
 	uint16  m_iED2KPartCount;
 	uint16	m_iED2KPartHashCount;
+	uint32	m_sizeLastPart;			// size of the last part
 	uint8	m_iUpPriority;
 	bool	m_bAutoUpPriority;
 	bool	m_PublishedED2K;

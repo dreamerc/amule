@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (C) 2005-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2005-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -59,11 +59,11 @@ class CEConnectDlg : public wxDialog {
 	wxString login, passwd;
 	bool m_save_user_pass;
 	
-	void OnOK(wxCommandEvent& event);
-	
 	DECLARE_EVENT_TABLE()
 public:
 	CEConnectDlg();
+	
+	void OnOK(wxCommandEvent& event);
 	
 	wxString Host() { return host; }
 	int Port() { return port; }
@@ -96,9 +96,9 @@ class CPreferencesRem : public CPreferences, public CECPacketHandlerBase {
 public:
 	CPreferencesRem(CRemoteConnect *);
 
-	Category_Struct *CreateCategory(const wxString& name, const CPath& path,
+	bool CreateCategory(Category_Struct *& category, const wxString& name, const CPath& path,
 						const wxString& comment, uint32 color, uint8 prio);
-	void UpdateCategory(uint8 cat, const wxString& name, const CPath& path,
+	bool UpdateCategory(uint8 cat, const wxString& name, const CPath& path,
 						const wxString& comment, uint32 color, uint8 prio);
 
 	void RemoveCat(uint8 cat);
@@ -141,16 +141,21 @@ protected:
 	virtual void HandlePacket(const CECPacket *packet)
 	{
 		switch(this->m_state) {
-			case IDLE: wxASSERT(0); // not expecting anything
+			case IDLE: wxFAIL; // not expecting anything
 			case STATUS_REQ_SENT:
 				// if derived class choose not to proceed, return - but with good status
 				this->m_state = IDLE;
 				if ( this->Phase1Done(packet) ) {
-					CECPacket req_full(this->m_full_req_cmd);
+					if (this->m_inc_tags) {
+						// Incremental tags: new items always carry full info.
+						ProcessUpdate(packet, NULL, m_full_req_tag);
+					} else {
+						// Non-incremental tags: we might get partial info on new items.
+						// Collect all this items in a tag, and then request full info about them.
+						CECPacket req_full(this->m_full_req_cmd);
 				
-					ProcessUpdate(packet, &req_full, m_full_req_tag);
+						ProcessUpdate(packet, &req_full, m_full_req_tag);
 					
-					if ( !this->m_inc_tags ) {
 						// Phase 3: request full info about files we don't have yet
 						if ( req_full.GetTagCount() ) {
 							m_conn->SendRequest(this, &req_full);
@@ -166,21 +171,13 @@ protected:
 		}
 	}
 public:
-	CRemoteContainer(CRemoteConnect *conn, bool /*inc_tags*/ = false)
+	CRemoteContainer(CRemoteConnect *conn, bool inc_tags)
 	{
 		m_state = IDLE;
 		
 		m_conn = conn;
 		m_item_count = 0;
-		
-		// FIXME:
-		// The CRemoteContainer has two ways of transfer: with "inc_tags" or without.
-		// I found that with inc_tags the update of transferred/completed is broken,
-		// therefore I disabled them.
-		// Either the inc-tag-mode should be fixed (but I can't to that without some 
-		// more insight how it's supposed to be working), or removed alltogether.
-		//m_inc_tags = inc_tags;
-		m_inc_tags = false;
+		m_inc_tags = inc_tags;
 	}
 	
 	virtual ~CRemoteContainer()
@@ -223,10 +220,13 @@ public:
 	// Flush & reload
 	//
 	/*
+	We usually don't keep outdated code as comments, but this blocking implementation
+	shows the overall procedure well. It had to be scattered for the event driven implementation.
+
 	bool FullReload(int cmd)
 	{
 		CECPacket req(cmd);
-		std::auto_ptr<const CECPacket> reply(this->m_conn->SendRecvPacket(&req));
+		CScopedPtr<const CECPacket> reply(this->m_conn->SendRecvPacket(&req));
 		if ( !reply.get() ) {
 			return false;
 		}
@@ -275,13 +275,16 @@ public:
 		this->m_full_req_tag = tag;
 	}
 	/*
+	We usually don't keep outdated code as comments, but this blocking implementation
+	shows the overall procedure well. It had to be scattered for the event driven implementation.
+
 	bool DoRequery(int cmd, int tag)
 	{
 		CECPacket req_sts(cmd, m_inc_tags ? EC_DETAIL_INC_UPDATE : EC_DETAIL_UPDATE);
 	
 		//
 		// Phase 1: request status
-		std::auto_ptr<const CECPacket> reply(this->m_conn->SendRecvPacket(&req_sts));
+		CScopedPtr<const CECPacket> reply(this->m_conn->SendRecvPacket(&req_sts));
 		if ( !reply.get() ) {
 			return false;
 		}
@@ -333,14 +336,20 @@ public:
 	
 			core_files.insert(tag->ID());
 			if ( m_items_hash.count(tag->ID()) ) {
+				// Item already known: update it
 				T *item = m_items_hash[tag->ID()];
 				ProcessItemUpdate(tag, item);
 			} else {
-				if ( m_inc_tags ) {
+				// New item
+				if (full_req) {
+					// Non-incremental mode: we have only partial info
+					// so we need to request full info before we can use the item
+					full_req->AddTag(CECTag(req_type, tag->ID()));
+				} else {
+					// Incremental mode: new items always carry full info,
+					// so we can add it right away
 					T *item = this->CreateItem(tag);
 					AddItem(item);
-				} else {
-					full_req->AddTag(CECTag(req_type, tag->ID()));
 				}
 			}
 		}
@@ -487,13 +496,13 @@ public:
 	uint16 GetWaitingPosition(const CUpDownClient *client) const;
 };
 
-class CDownQueueRem : public CRemoteContainer<CPartFile, CMD4Hash, CEC_PartFile_Tag> {
-	std::map<CMD4Hash, PartFileEncoderData> m_enc_map;
+class CDownQueueRem : public CRemoteContainer<CPartFile, uint32, CEC_PartFile_Tag> {
+	std::map<uint32, PartFileEncoderData> m_enc_map;
 public:
 	CDownQueueRem(CRemoteConnect *);
 	
 	uint32 GetFileCount() { return GetCount(); }
-	CPartFile* GetFileByID(const CMD4Hash& id) { return GetByID(id); }
+	CPartFile* GetFileByID(uint32 id) { return GetByID(id); }
 	CPartFile* GetFileByIndex(unsigned int idx) { return GetByIndex(idx); }
 	
 	bool IsPartFile(const CKnownFile* totest) const;
@@ -512,7 +521,7 @@ public:
 	//
 	void StopUDPRequests();
 	void AddFileLinkToDownload(CED2KFileLink*, uint8);
-	bool AddLink(const wxString &link, int category = 0);
+	bool AddLink(const wxString &link, uint8 category = 0);
 	void UnsetCompletedFilesExist();
 	void ResetCatParts(int cat);
 	void AddSearchToDownload(CSearchFile* toadd, uint8 category);
@@ -522,13 +531,13 @@ public:
 	//
 	CPartFile *CreateItem(CEC_PartFile_Tag *);
 	void DeleteItem(CPartFile *);
-	CMD4Hash GetItemID(CPartFile *);
+	uint32 GetItemID(CPartFile *);
 	void ProcessItemUpdate(CEC_PartFile_Tag *, CPartFile *);
 	bool Phase1Done(const CECPacket *);
 };
 
-class CSharedFilesRem : public CRemoteContainer<CKnownFile, CMD4Hash, CEC_SharedFile_Tag> {
-	std::map<CMD4Hash, RLE_Data> m_enc_map;
+class CSharedFilesRem : public CRemoteContainer<CKnownFile, uint32, CEC_SharedFile_Tag> {
+	std::map<uint32, RLE_Data> m_enc_map;
 	
 	virtual void HandlePacket(const CECPacket *);
 	
@@ -540,7 +549,7 @@ class CSharedFilesRem : public CRemoteContainer<CKnownFile, CMD4Hash, CEC_Shared
 public:
 	CSharedFilesRem(CRemoteConnect *);
 	
-	CKnownFile *GetFileByID(CMD4Hash id) { return GetByID(id); }
+	CKnownFile *GetFileByID(uint32 id) { return GetByID(id); }
 
 	void SetFilePrio(CKnownFile *file, uint8 prio);
 
@@ -556,7 +565,7 @@ public:
 	//
 	CKnownFile *CreateItem(CEC_SharedFile_Tag *);
 	void DeleteItem(CKnownFile *);
-	CMD4Hash GetItemID(CKnownFile *);
+	uint32 GetItemID(CKnownFile *);
 	void ProcessItemUpdate(CEC_SharedFile_Tag *, CKnownFile *);
 	bool Phase1Done(const CECPacket *);
 };
@@ -573,7 +582,7 @@ public:
 		accepted = 0;
 	}
 	
-	CKnownFile *FindKnownFileByID(const CMD4Hash& id)
+	CKnownFile *FindKnownFileByID(uint32 id)
 	{
 		return m_shared_files->GetByID(id); 
 	}
@@ -581,12 +590,6 @@ public:
 	uint16 requested;
 	uint32 transferred;
 	uint16 accepted;
-};
-
-class CClientCreditsRem {
-	bool m_crypt_avail;
-public:
-	bool CryptoAvailable() { return m_crypt_avail; }
 };
 
 class CClientListRem {
@@ -639,6 +642,7 @@ public:
 		const CSearchList::CSearchParams& params);
 		
 	void StopGlobalSearch();
+	void StopKadSearch();
 	
 	//
 	// template
@@ -662,8 +666,8 @@ public:
 	uint32 GetPeakConnections() { return m_peak_connections; }
 };
 
-class CamuleRemoteGuiApp : public wxApp, public CamuleGuiBase {
-	wxTimer* poll_timer;
+class CamuleRemoteGuiApp : public wxApp, public CamuleGuiBase, public CamuleAppCommon {
+	wxTimer*	poll_timer;
 
 	virtual int InitGui(bool geometry_enable, wxString &geometry_string);
 
@@ -675,9 +679,9 @@ class CamuleRemoteGuiApp : public wxApp, public CamuleGuiBase {
 	
 	void OnECConnection(wxEvent& event);
 	void OnECInitDone(wxEvent& event);
-	void OnLoggingEvent(CLoggingEvent& evt);
 	void OnNotifyEvent(CMuleGUIEvent& evt);
-	
+	void OnFinishedHTTPDownload(CMuleInternalEvent& event);
+
 	CStatsUpdaterRem m_stats_updater;
 public:
 
@@ -691,12 +695,11 @@ public:
 
 	bool CopyTextToClipboard(wxString strText);
 
-	virtual void ShowAlert(wxString msg, wxString title, int flags);
+	virtual int ShowAlert(wxString msg, wxString title, int flags);
 
 	void ShutDown(wxCloseEvent &evt);
 
 	CPreferencesRem *glob_prefs;
-	wxString ConfigDir;
 
 	//
 	// Provide access to core data thru EC
@@ -706,7 +709,6 @@ public:
 	CDownQueueRem *downloadqueue;
 	CSharedFilesRem *sharedfiles;
 	CKnownFilesRem *knownfiles;
-	CClientCreditsRem *clientcredits;
 	CClientListRem *clientlist;
 	CIPFilterRem *ipfilter;
 	CSearchListRem *searchlist;
@@ -717,14 +719,12 @@ public:
 	bool AddServer(CServer *srv, bool fromUser = false);
 
 	uint32 GetPublicIP();
-	wxString CreateMagnetLink(const CAbstractFile *f);
-	wxString CreateED2kLink(const CAbstractFile* f, bool add_source = false, bool use_hostname = false, bool addcryptoptions = false);
-	wxString CreateED2kAICHLink(const CKnownFile* f);
 
 	wxString GetLog(bool reset = false);
 	wxString GetServerLog(bool reset = false);
 
 	void AddServerMessageLine(wxString &msg);
+	void AddRemoteLogLine(const wxString& line);
 
 	void SetOSFiles(wxString ) { /* onlinesig is created on remote side */ }
 
@@ -741,7 +741,23 @@ public:
 	bool IsKadRunning() const { return ((m_ConnState & CONNECTED_KAD_OK) 
 				|| (m_ConnState & CONNECTED_KAD_FIREWALLED)
 				|| (m_ConnState & CONNECTED_KAD_NOT)); }
-				
+
+	// Check Kad state (UDP)
+	bool IsFirewalledKadUDP() const		{ return theStats::IsFirewalledKadUDP(); }
+	// Kad stats
+	uint32 GetKadUsers() const			{ return theStats::GetKadUsers(); }
+	uint32 GetKadFiles() const			{ return theStats::GetKadFiles(); }
+	uint32 GetKadIndexedSources() const	{ return theStats::GetKadIndexedSources(); }
+	uint32 GetKadIndexedKeywords() const{ return theStats::GetKadIndexedKeywords(); }
+	uint32 GetKadIndexedNotes() const	{ return theStats::GetKadIndexedNotes(); }
+	uint32 GetKadIndexedLoad() const	{ return theStats::GetKadIndexedLoad(); }
+	// True IP of machine
+	uint32 GetKadIPAdress() const		{ return theStats::GetKadIPAdress(); }
+	// Buddy status
+	uint8	GetBuddyStatus() const		{ return theStats::GetBuddyStatus(); }
+	uint32	GetBuddyIP() const			{ return theStats::GetBuddyIP(); }
+	uint32	GetBuddyPort() const		{ return theStats::GetBuddyPort(); }
+
 	void StartKad();
 	void StopKad();
 	
@@ -767,12 +783,8 @@ public:
 };
 
 DECLARE_APP(CamuleRemoteGuiApp)
-#ifdef AMULE_REMOTE_GUI_CPP
-	CamuleRemoteGuiApp *theApp;
-#else
-	extern CamuleRemoteGuiApp *theApp;
-#endif
 
+extern CamuleRemoteGuiApp *theApp;
 
 #endif /* AMULE_REMOTE_GUI_H */
 

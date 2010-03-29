@@ -6,6 +6,8 @@
 #include "updownclient.h"
 #include "ServerList.h"
 #include "Preferences.h"
+#include "ExternalConn.h"
+#include "SearchFile.h"
 
 #ifndef AMULE_DAEMON
 #	include "ChatWnd.h"
@@ -26,18 +28,6 @@
 #	include "PartFileConvert.h"
 #endif
 
-#ifdef AMULE_DAEMON
-#	define NOT_ON_DAEMON(x) WXUNUSED(x)
-#else
-#	define NOT_ON_DAEMON(x) x
-#endif
-
-#ifdef CLIENT_GUI
-#	define NOT_ON_REMOTEGUI(x)	WXUNUSED(x)
-#else
-#	define NOT_ON_REMOTEGUI(x)	x
-#endif
-
 
 DEFINE_LOCAL_EVENT_TYPE(MULE_EVT_NOTIFY)
 
@@ -48,7 +38,7 @@ namespace MuleNotify
 	void HandleNotification(const CMuleNotiferBase& ntf)
 	{
 		if (wxThread::IsMain()) {
-#if defined(AMULE_DAEMON) || defined(REMOTE_GUI)
+#if defined(AMULE_DAEMON)
 			ntf.Notify();
 #else
 			if (theApp->amuledlg) {
@@ -90,8 +80,11 @@ namespace MuleNotify
 	}
 
 	
-	void DownloadCtrlUpdateItem(const void* NOT_ON_DAEMON(item))
+	void DownloadCtrlUpdateItem(const void* item)
 	{
+#ifndef CLIENT_GUI
+		theApp->ECServerHandler->m_ec_notifier->DownloadFile_SetDirty((CPartFile *)item);
+#endif
 #ifndef AMULE_DAEMON
 		if (theApp->amuledlg->m_transferwnd && theApp->amuledlg->m_transferwnd->downloadlistctrl) {
 			theApp->amuledlg->m_transferwnd->downloadlistctrl->UpdateItem(item);
@@ -163,6 +156,13 @@ namespace MuleNotify
 #endif
 	}
 
+	void ShowGUI()
+	{
+#ifndef AMULE_DAEMON
+		theApp->amuledlg->Iconize(false);
+#endif
+	}
+	
 #ifdef CLIENT_GUI
 	
 	void PartFile_Swap_A4AF(CPartFile* file)
@@ -283,8 +283,9 @@ namespace MuleNotify
 	}
 
 
-	void DownloadCtrlAddFile(CPartFile* NOT_ON_DAEMON(file))
+	void DownloadCtrlAddFile(CPartFile* file)
 	{
+		theApp->ECServerHandler->m_ec_notifier->DownloadFile_AddFile(file);
 #ifndef AMULE_DAEMON
 		if (theApp->amuledlg->m_transferwnd && theApp->amuledlg->m_transferwnd->downloadlistctrl ) {
 			theApp->amuledlg->m_transferwnd->downloadlistctrl->AddFile(file);
@@ -303,8 +304,9 @@ namespace MuleNotify
 #endif
 	}
 	
-	void DownloadCtrlRemoveFile(CPartFile* NOT_ON_DAEMON(file))
+	void DownloadCtrlRemoveFile(CPartFile* file)
 	{
+		theApp->ECServerHandler->m_ec_notifier->DownloadFile_RemoveFile(file);
 #ifndef AMULE_DAEMON
 		if (theApp->amuledlg->m_transferwnd && theApp->amuledlg->m_transferwnd->downloadlistctrl) {
 			theApp->amuledlg->m_transferwnd->downloadlistctrl->RemoveFile(file);
@@ -486,8 +488,9 @@ namespace MuleNotify
 #endif
 	}
 	
-	void Search_Update_Sources(CSearchFile* NOT_ON_DAEMON(result))
+	void Search_Update_Sources(CSearchFile* result)
 	{
+		result->SetDownloadStatus();
 #ifndef AMULE_DAEMON
 		if (theApp->amuledlg && theApp->amuledlg->m_searchwnd) {
 			theApp->amuledlg->m_searchwnd->UpdateResult(result);
@@ -505,11 +508,11 @@ namespace MuleNotify
 	}
 
 	
-	void ChatRefreshFriend(uint32 NOT_ON_DAEMON(lastUsedIP), uint32 NOT_ON_DAEMON(lastUsedPort), wxString NOT_ON_DAEMON(name))
+	void ChatRefreshFriend(CFriend * NOT_ON_DAEMON(Friend), bool NOT_ON_DAEMON(connected))
 	{
 #ifndef AMULE_DAEMON
 		if (theApp->amuledlg->m_chatwnd) {
-			theApp->amuledlg->m_chatwnd->RefreshFriend(CMD4Hash(), name, lastUsedIP, lastUsedPort);
+			theApp->amuledlg->m_chatwnd->RefreshFriend(Friend, connected);
 		}
 #endif
 	}
@@ -533,13 +536,19 @@ namespace MuleNotify
 	}
 	
 
-	void ShowConnState(long NOT_ON_DAEMON(state))
+	void ChatSendCaptcha(wxString NOT_ON_DAEMON(captcha), uint64 NOT_ON_DAEMON(to_id))
 	{
 #ifndef AMULE_DAEMON
-#ifdef CLIENT_GUI
-		theApp->m_ConnState = state;
+		if (theApp->amuledlg->m_chatwnd) {
+			theApp->amuledlg->m_chatwnd->SendMessage(captcha, wxEmptyString, to_id);
+		}
 #endif
-		
+	}
+	
+
+	void ShowConnState(long WXUNUSED(state))
+	{
+#ifndef AMULE_DAEMON
 		theApp->amuledlg->ShowConnectionState();
 #endif
 	}
@@ -561,14 +570,6 @@ namespace MuleNotify
 		}
 #endif
 	}
-	
-	void ShowGUI()
-	{
-#ifndef AMULE_DAEMON
-		theApp->amuledlg->Iconize(false);
-#endif
-	}
-	
 
 	void CategoryAdded()
 	{
@@ -592,9 +593,11 @@ namespace MuleNotify
 #endif
 	}
 	
-	void CategoryDelete(uint32 NOT_ON_DAEMON(cat))
+	void CategoryDelete(uint32 cat)
 	{
-#ifndef AMULE_DAEMON
+#ifdef AMULE_DAEMON
+		theApp->glob_prefs->RemoveCat(cat);
+#else
 		if (theApp->amuledlg->m_transferwnd) {
 			theApp->amuledlg->m_transferwnd->RemoveCategory(cat);
 		}

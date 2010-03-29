@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -122,7 +122,9 @@ typedef std::list<CKnownFile*> CKnownFilePtrList;
 typedef std::list<CUpDownClient*> CClientPtrList;
 //@}
 
+typedef std::vector<uint8>  ArrayOfUInts8;
 typedef std::vector<uint16> ArrayOfUInts16;
+typedef std::vector<uint64> ArrayOfUInts64;
 
 /* This is the Evil Void String For Returning On Const References From Hell */
 // IT MEANS I WANT TO USE IT EVERYWHERE. DO NOT MOVE IT. 

@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -74,7 +74,7 @@ void ParsedSearchExpression(const CSearchExpr* pexpr)
 	int iOpOr = 0;
 	int iOpNot = 0;
 
-	for (unsigned int i = 0; i < pexpr->m_aExpr.Count(); i++) {
+	for (unsigned int i = 0; i < pexpr->m_aExpr.GetCount(); i++) {
 		wxString str(pexpr->m_aExpr[i]);
 		if (str == SEARCHOPTOK_AND) {
 			iOpAnd++;
@@ -109,7 +109,7 @@ void ParsedSearchExpression(const CSearchExpr* pexpr)
 	// optimize search expression, if no OR nor NOT specified
 	if (iOpAnd > 0 && iOpOr == 0 && iOpNot == 0) {
 		wxString strAndTerms;
-		for (unsigned int i = 0; i < pexpr->m_aExpr.Count(); i++) {
+		for (unsigned int i = 0; i < pexpr->m_aExpr.GetCount(); i++) {
 			if (pexpr->m_aExpr[i] != SEARCHOPTOK_AND) {
 				// Minor optimization: Because we added the Kad keyword to the boolean search expression,
 				// we remove it here (and only here) again because we know that the entire search expression
@@ -122,7 +122,7 @@ void ParsedSearchExpression(const CSearchExpr* pexpr)
 				}
 			}
 		}
-		wxASSERT( _SearchExpr.m_aExpr.Count() == 0);
+		wxASSERT( _SearchExpr.m_aExpr.GetCount() == 0);
 		_SearchExpr.m_aExpr.Add(strAndTerms);
 	} else {
 		if (pexpr->m_aExpr.GetCount() != 1 || pexpr->m_aExpr[0] != s_strCurKadKeyword)			
@@ -313,10 +313,10 @@ wxString CSearchList::StartNewSearch(uint32* searchID, SearchType type, const CS
 	CMemFilePtr data = CreateSearchData(params, type, supports64bit, packetUsing64bit);
 	
 	if (data.get() == NULL) {
-		wxASSERT(_astrParserErrors.Count());
+		wxASSERT(_astrParserErrors.GetCount());
 		wxString error;
 		
-		for (unsigned int i = 0; i < _astrParserErrors.Count(); ++i) {
+		for (unsigned int i = 0; i < _astrParserErrors.GetCount(); ++i) {
 			error += _astrParserErrors[i] + wxT("\n");
 		}
 		
@@ -331,11 +331,12 @@ wxString CSearchList::StartNewSearch(uint32* searchID, SearchType type, const CS
 			}
 		
 			// searchstring will get tokenized there
-			// The tab must be created with the Kad search ID, so seardhID is updated.
+			// The tab must be created with the Kad search ID, so searchID is updated.
 			Kademlia::CSearch* search = Kademlia::CSearchManager::PrepareFindKeywords(
 										 params.searchString, data->GetLength(), data->GetRawBuffer(), *searchID);
 
 			*searchID = search->GetSearchID();
+			m_currentSearch = *searchID;
 		} catch (const wxString& what) {
 			AddLogLineM(true, what);
 			return _("Unexpected error while attempting Kad search: ") + what;				
@@ -351,6 +352,7 @@ wxString CSearchList::StartNewSearch(uint32* searchID, SearchType type, const CS
 		theApp->serverconnect->SendPacket(searchPacket, (type == LocalSearch));
 
 		if (type == GlobalSearch) {
+			delete m_searchPacket;
 			m_searchPacket = searchPacket;
 			m_64bitSearchPacket = packetUsing64bit;
 			m_searchPacket->SetOpCode(OP_GLOBSEARCHREQ); // will be changed later when actually sending the packet!!
@@ -483,7 +485,7 @@ void CSearchList::ProcessSharedFileList(const byte* in_packet, uint32 size,
 	bool unicoded = (sender->GetUnicodeSupport() != utf8strNone);
 	for (unsigned int i = 0; i != results; ++i){			
 		CSearchFile* toadd = new CSearchFile(packet, unicoded, searchID, 0, 0, directory);
-		if (sender){
+		if (sender) {
 			toadd->SetClientID(sender->GetUserIDHybrid());
 			toadd->SetClientPort(sender->GetUserPort());
 		}
@@ -510,9 +512,9 @@ void CSearchList::ProcessSearchAnswer(const uint8_t* in_packet, uint32_t size, b
 {
 	CMemFile packet(in_packet, size);
 
-       uint32_t results = packet.ReadUInt32();
-       for (; results > 0; --results) {
-               AddToList(new CSearchFile(packet, optUTF8, m_currentSearch, serverIP, serverPort), false);
+	uint32_t results = packet.ReadUInt32();
+	for (; results > 0; --results) {
+		AddToList(new CSearchFile(packet, optUTF8, m_currentSearch, serverIP, serverPort), false);
 	}
 }
 
@@ -611,21 +613,32 @@ void CSearchList::AddFileToDownloadByHash(const CMD4Hash& hash, uint8 cat)
 
 void CSearchList::StopGlobalSearch()
 {
-	m_currentSearch = -1;
-	delete m_searchPacket;
-	m_searchPacket = NULL;
-	m_searchInProgress = false;
-	
-	// Order is crucial here: on wx_MSW an additional event can be generated during the stop.
-	// So the packet has to be deleted first, so that OnGlobalSearchTimer() returns immediately
-	// without calling StopGlobalSearch() again.
-	m_searchTimer.Stop();
+	if (m_searchType == GlobalSearch) {
+		m_currentSearch = -1;
+		delete m_searchPacket;
+		m_searchPacket = NULL;
+		m_searchInProgress = false;
 
-	CoreNotify_Search_Update_Progress(0xffff);
+		// Order is crucial here: on wx_MSW an additional event can be generated during the stop.
+		// So the packet has to be deleted first, so that OnGlobalSearchTimer() returns immediately
+		// without calling StopGlobalSearch() again.
+		m_searchTimer.Stop();
+
+		CoreNotify_Search_Update_Progress(0xffff);
+	}
 }
 
 
-CSearchList::CMemFilePtr CSearchList::CreateSearchData(const CSearchParams& params, SearchType type, bool supports64bit, bool& packetUsing64bit)
+void CSearchList::StopKadSearch()
+{
+	if (m_searchType == KadSearch) {
+		Kademlia::CSearchManager::StopSearch(m_currentSearch, false);
+		m_currentSearch = -1;
+	}
+}
+
+
+CSearchList::CMemFilePtr CSearchList::CreateSearchData(const CSearchParams& params, SearchType WXUNUSED(type), bool supports64bit, bool& packetUsing64bit)
 {
 	// Count the number of used parameters
 	unsigned int parametercount = 0;
@@ -657,12 +670,12 @@ CSearchList::CMemFilePtr CSearchList::CreateSearchData(const CSearchParams& para
 	LexFree();
 	
 #ifdef __DEBUG__
-	printf("Search parsing result for \"%s\": %i\n",
-		(const char*)unicode2UTF8(params.searchString),iParseResult);
+	AddLogLineNS(CFormat(wxT("Search parsing result for \"%s\": %i"))
+		% params.searchString % iParseResult);
 #endif
-	if (_astrParserErrors.Count() > 0) {
-		for (unsigned int i=0; i < _astrParserErrors.Count(); ++i) {
-			printf("Error %u: %s\n",i,(const char*)unicode2UTF8(_astrParserErrors[i]));
+	if (_astrParserErrors.GetCount() > 0) {
+		for (unsigned int i=0; i < _astrParserErrors.GetCount(); ++i) {
+			AddLogLineNS(CFormat(wxT("Error %u: %s\n")) % i % _astrParserErrors[i]);
 		}
 		
 		return CMemFilePtr(NULL);
@@ -675,17 +688,18 @@ CSearchList::CMemFilePtr CSearchList::CreateSearchData(const CSearchParams& para
 	}
 	
 	#ifdef __DEBUG__
-	printf("Search expression: ");
-	for (unsigned int i = 0; i < _SearchExpr.m_aExpr.Count(); i++){
-		printf("%s ",(const char*)unicode2char(_SearchExpr.m_aExpr[i]));
+	wxString mes(wxT("Search expression:"));
+	for (unsigned int i = 0; i < _SearchExpr.m_aExpr.GetCount(); i++) {
+		mes << wxT(" ") << _SearchExpr.m_aExpr[i];
 	}
-	printf("\nExpression count: %i\n",(int)_SearchExpr.m_aExpr.GetCount());
+	AddLogLineNS(mes);
+	AddLogLineNS(CFormat(wxT("Expression count: %i")) % _SearchExpr.m_aExpr.GetCount());
 	#endif
 
 	parametercount += _SearchExpr.m_aExpr.GetCount();
 	
 	#ifdef __DEBUG__
-	printf("Parameters: %i\n",parametercount);
+	AddLogLineNS(CFormat(wxT("Parameters: %i")) % parametercount);
 	#endif
 	
 	/* Leave the unicode comment there, please... */
@@ -1001,6 +1015,22 @@ void CSearchList::KademliaSearchKeyword(uint32_t searchID, const Kademlia::CUInt
 	tempFile->SetKadPublishInfo(kadPublishInfo);
 
 	AddToList(tempFile);
+}
+
+void CSearchList::UpdateSearchFileByHash(const CMD4Hash& hash)
+{
+	for (ResultMap::iterator it = m_results.begin(); it != m_results.end(); it++) {
+		CSearchResultList& results = it->second;
+		for (size_t i = 0; i < results.size(); ++i) {
+			CSearchFile* item = results.at(i);
+			
+			if (hash == item->GetFileHash()) {
+				// This covers only parent items,
+				// child items have to be updated separately.
+				Notify_Search_Update_Sources(item);
+			}
+		}
+	}
 }
 
 // File_checked_for_headers

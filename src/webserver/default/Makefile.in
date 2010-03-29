@@ -47,15 +47,16 @@ am__aclocal_m4_deps = $(top_srcdir)/m4/GeoIP.m4 \
 	$(top_srcdir)/m4/glibc21.m4 $(top_srcdir)/m4/iconv.m4 \
 	$(top_srcdir)/m4/intdiv0.m4 $(top_srcdir)/m4/inttypes-pri.m4 \
 	$(top_srcdir)/m4/inttypes.m4 $(top_srcdir)/m4/inttypes_h.m4 \
-	$(top_srcdir)/m4/lcmessage.m4 $(top_srcdir)/m4/lib-ld.m4 \
-	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
-	$(top_srcdir)/m4/libpng.m4 $(top_srcdir)/m4/libupnp.m4 \
-	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/pkg.m4 \
-	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/m4/readline.m4 \
-	$(top_srcdir)/m4/stdint_h.m4 $(top_srcdir)/m4/uintmax_t.m4 \
-	$(top_srcdir)/m4/ulonglong.m4 $(top_srcdir)/m4/wxwin.m4 \
-	$(top_srcdir)/m4/zlib.m4 $(top_srcdir)/acinclude.m4 \
-	$(top_srcdir)/configure.in
+	$(top_srcdir)/m4/kde.m4 $(top_srcdir)/m4/lcmessage.m4 \
+	$(top_srcdir)/m4/lib-ld.m4 $(top_srcdir)/m4/lib-link.m4 \
+	$(top_srcdir)/m4/lib-prefix.m4 $(top_srcdir)/m4/libpng.m4 \
+	$(top_srcdir)/m4/libupnp.m4 $(top_srcdir)/m4/nls.m4 \
+	$(top_srcdir)/m4/pkg.m4 $(top_srcdir)/m4/plasmamule.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/m4/qt.m4 \
+	$(top_srcdir)/m4/readline.m4 $(top_srcdir)/m4/stdint_h.m4 \
+	$(top_srcdir)/m4/uintmax_t.m4 $(top_srcdir)/m4/ulonglong.m4 \
+	$(top_srcdir)/m4/wxwin.m4 $(top_srcdir)/m4/zlib.m4 \
+	$(top_srcdir)/acinclude.m4 $(top_srcdir)/configure.in
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
@@ -137,11 +138,9 @@ ED2K_FALSE = @ED2K_FALSE@
 ED2K_MANPAGES = @ED2K_MANPAGES@
 ED2K_TRUE = @ED2K_TRUE@
 EGREP = @EGREP@
-ENABLE_IP2COUNTRY_FALSE = @ENABLE_IP2COUNTRY_FALSE@
-ENABLE_IP2COUNTRY_TRUE = @ENABLE_IP2COUNTRY_TRUE@
-ENABLE_UPNP_FALSE = @ENABLE_UPNP_FALSE@
-ENABLE_UPNP_TRUE = @ENABLE_UPNP_TRUE@
 EXEEXT = @EXEEXT@
+FILEVIEW_FALSE = @FILEVIEW_FALSE@
+FILEVIEW_TRUE = @FILEVIEW_TRUE@
 GDLIB_CFLAGS = @GDLIB_CFLAGS@
 GDLIB_CONFIG_PATH = @GDLIB_CONFIG_PATH@
 GDLIB_LDFLAGS = @GDLIB_LDFLAGS@
@@ -166,6 +165,11 @@ INTLBISON = @INTLBISON@
 INTLLIBS = @INTLLIBS@
 INTLOBJS = @INTLOBJS@
 INTL_LIBTOOL_SUFFIX_PREFIX = @INTL_LIBTOOL_SUFFIX_PREFIX@
+KDE4_CONFIG = @KDE4_CONFIG@
+KDE_HEADER_DIR = @KDE_HEADER_DIR@
+KDE_ICON_PATH = @KDE_ICON_PATH@
+KDE_MODULE_PATH = @KDE_MODULE_PATH@
+KDE_SERVICE_PATH = @KDE_SERVICE_PATH@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LEX = @LEX@
@@ -214,13 +218,19 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
+PLASMAMULE_FALSE = @PLASMAMULE_FALSE@
+PLASMAMULE_TRUE = @PLASMAMULE_TRUE@
 POSUB = @POSUB@
 POW_LIB = @POW_LIB@
+QT_CORE_CXXFLAGS = @QT_CORE_CXXFLAGS@
+QT_CORE_LIBS = @QT_CORE_LIBS@
+QT_GUI_CXXFLAGS = @QT_GUI_CXXFLAGS@
+QT_GUI_LIBS = @QT_GUI_LIBS@
+QT_MOC = @QT_MOC@
 RANLIB = @RANLIB@
 RC = @RC@
 RCFLAGS = @RCFLAGS@
 READLINE_LIBS = @READLINE_LIBS@
-REGEX_LIBS = @REGEX_LIBS@
 RESOLV_LIB = @RESOLV_LIB@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -231,8 +241,8 @@ SYS_WIN32_TRUE = @SYS_WIN32_TRUE@
 USE_INCLUDED_LIBINTL = @USE_INCLUDED_LIBINTL@
 USE_NLS = @USE_NLS@
 VERSION = @VERSION@
+WEBSERVER_MANPAGES = @WEBSERVER_MANPAGES@
 WEB_FALSE = @WEB_FALSE@
-WEB_MANPAGES = @WEB_MANPAGES@
 WEB_TRUE = @WEB_TRUE@
 WXBASE_CPPFLAGS = @WXBASE_CPPFLAGS@
 WXBASE_LIBS = @WXBASE_LIBS@
@@ -247,7 +257,6 @@ WX_CXXFLAGS = @WX_CXXFLAGS@
 WX_CXXFLAGS_ONLY = @WX_CXXFLAGS_ONLY@
 WX_DEBUG = @WX_DEBUG@
 WX_LIBS = @WX_LIBS@
-WX_LIBS_STATIC = @WX_LIBS_STATIC@
 WX_PORT = @WX_PORT@
 WX_RESCOMP = @WX_RESCOMP@
 WX_SHARED = @WX_SHARED@
@@ -255,7 +264,8 @@ WX_UNICODE = @WX_UNICODE@
 WX_VERSION_FULL = @WX_VERSION_FULL@
 WX_VERSION_MAJOR = @WX_VERSION_MAJOR@
 WX_VERSION_MINOR = @WX_VERSION_MINOR@
-X11LIBS = @X11LIBS@
+XAS_FALSE = @XAS_FALSE@
+XAS_TRUE = @XAS_TRUE@
 XGETTEXT = @XGETTEXT@
 YACC = @YACC@
 ZLIB_CPPFLAGS = @ZLIB_CPPFLAGS@
@@ -309,56 +319,74 @@ sharedstatedir = @sharedstatedir@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 dist_webserver_DATA = \
-	aMule.tmpl \
-	add_server.gif \
-	arrow_down.gif \
-	arrow_right.gif \
-	arrow_up.gif \
-	back.gif \
+	amuleweb-main-dload.php \
+	amuleweb-main-kad.php \
+	amuleweb-main-log.php \
+	amuleweb-main-prefs.php \
+	amuleweb-main-search.php \
+	amuleweb-main-servers.php \
+	amuleweb-main-shared.php \
+	amuleweb-main-stats.php \
 	black.gif \
+	blank1x1.gif \
 	blue1.gif \
 	blue2.gif \
 	blue3.gif \
 	blue4.gif \
 	blue5.gif \
 	blue6.gif \
-	cp_download.gif \
-	cp_kad.gif \
-	cp_search.gif \
-	cp_servers.gif \
-	cp_settings.gif \
-	cp_shared.gif \
-	cp_stats.gif \
-	emule.gif \
-	green.gif \
-	greenpercent.gif \
-	l_cancel.gif \
-	l_connect.gif \
-	l_down.gif \
-	l_ed2klink.gif \
-	l_info.gif \
-	l_pause.gif \
-	l_resume.gif \
-	l_up.gif \
-	log.gif \
-	logo.jpg \
+	cancel.gif \
+	close.png \
+	col.png \
+	connect.gif \
+	down.png \
+	edkserv_0.png \
+	edkserv_1.png \
+	favicon.ico \
+	filter.png \
+	fond.gif \
+	fond_haut.png \
+	footer.php \
+	index.html \
+	loginfond.gif \
+	loginfond_haut.png \
+	loginlogo.jpg \
+	loginlogo.png \
+	login.php \
+	logo.png \
+	log.php \
+	maquette.dwt \
+	ok.png \
+	pause.png \
+	play.png \
 	red.gif \
-	transparent.gif \
-	yellow.gif \
-	phpamule.png \
+	refresh.png \
+	search_0.png \
+	search_1.png \
+	shared_0.png \
+	shared_1.png \
+	sheserv_0.png \
+	sheserv_1.png \
+	stats_0.png \
+	stats_1.png \
+	stats.php \
+	stats_tree.php \
+	style.css \
+	tab_bottom_left.png \
+	tab_bottom.png \
+	tab_bottom_right.png \
+	tab_left.png \
+	tab_right.png \
+	tab_top_left.png \
+	tab_top.png \
+	tab_top_right.png \
+	transf_0.png \
+	transf_1.png \
+	tree-closed.gif \
 	tree-leaf.gif \
 	tree-open.gif \
-	tree-closed.gif \
-	favicon.ico \
-	downloads.php \
-	preferences.php \
-	search.php \
-	servers.php \
-	shared.php \
-	stat_graphs.php \
-	stat_tree.php \
-	login.php \
-	index.php
+	up.png \
+	yellow.gif
 
 webserverdir = $(pkgdatadir)/webserver/default
 MAINTAINERCLEANFILES = Makefile.in

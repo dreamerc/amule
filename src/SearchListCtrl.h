@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -107,17 +107,13 @@ public:
 	 *
 	 * @param index The zero-based index of the item.
 	 *
-	 * This function returns the color of the item based on the following:
+	 * This function sets the color of the item based on the following:
 	 *  - Downloading files are marked in red.
 	 *  - Known (shared/completed) files are marked in green.
 	 *  - New files are marked in blue depending on the number of sources.
+	 *  - Canceled files are marked in magenta.
 	 */
 	void UpdateItemColor(long index);
-
-	/**
-	 * Updates the colors of all assosiated items, which means parents and/or siblings.
-	 */
-	void UpdateAllRelativesColor(CSearchFile *file, long index);
 
 	/**
 	 * Returns the current Search Id. 
@@ -138,7 +134,7 @@ public:
 	void	SetFilter(const wxString& regExp, bool invert, bool filterKnown);
 
 	/**
-	 * Toggels the use of filtering on and off.
+	 * Toggles the use of filtering on and off.
 	 */
 	void	EnableFiltering(bool enabled);
 	
@@ -153,7 +149,13 @@ public:
 	 * @param category The target category, or -1 to use the drop-down selection.
 	 */
 	void	DownloadSelected(int category = -1);	
-	
+
+	static wxString DetermineStatusPrintable(CSearchFile *toshow);
+
+protected:
+	/// Return old column order.
+	wxString GetOldColumnOrder() const;
+
 protected:
 	typedef std::list<CSearchFile*> ResultList;
 

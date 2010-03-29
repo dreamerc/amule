@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -115,6 +115,8 @@ private:
 		uint8		AccessLevel;
 	};
 
+	//! The URL from which the IP filter was downloaded
+	wxString m_URL;
 	
 	//! The is the type of map used to store the IPs.
 	typedef CRangeMap<rangeObject, uint32> IPMap;

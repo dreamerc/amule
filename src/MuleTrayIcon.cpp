@@ -1,9 +1,9 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 Angel Vidal (Kry) ( kry@amule.org )
-// Copyright (c) 2003-2009 Patrizio Bassi (Hetfield) ( hetfield@amule.org )
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2004-2008 Angel Vidal ( kry@amule.org )
+// Copyright (c) 2003-2008 Patrizio Bassi ( hetfield@amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -45,6 +45,7 @@
 #include "StatisticsDlg.h"		// Needed for CStatisticsDlg::getColors()
 #include "Statistics.h"			// Needed for theStats
 #include <common/Format.h>			// Needed for CFormat
+#include "Logger.h"
 
 
 // Pop-up menu clickable entries
@@ -118,11 +119,11 @@ void CMuleTrayIcon::SetUploadSpeed(wxCommandEvent& event){
 			wxMenuItem* item=menu->FindItem(event.GetId());
 			if (item!=NULL) {
 				long temp;
-				if (item->GetLabel()==(_("Unlimited"))) {
+				if (item->GetItemLabelText()==(_("Unlimited"))) {
 					temp=UNLIMITED;
 				}
 				else {
-					temp=GetSpeedFromString(item->GetLabel());
+					temp=GetSpeedFromString(item->GetItemLabelText());
 				}
 				thePrefs::SetMaxUpload(temp);
 
@@ -144,11 +145,11 @@ void CMuleTrayIcon::SetDownloadSpeed(wxCommandEvent& event){
 			wxMenuItem* item=menu->FindItem(event.GetId());
 			if (item!=NULL) {
 				long temp;
-				if (item->GetLabel()==(_("Unlimited"))) {
+				if (item->GetItemLabelText()==(_("Unlimited"))) {
 					temp=UNLIMITED;
 				}
 				else {
-					temp=GetSpeedFromString(item->GetLabel());
+					temp=GetSpeedFromString(item->GetItemLabelText());
 				}
 				thePrefs::SetMaxDownload(temp);
 
@@ -196,6 +197,8 @@ CMuleTrayIcon::CMuleTrayIcon()
 CMuleTrayIcon::~CMuleTrayIcon() 
 {
 #ifdef __WXGTK__
+	// Issue has been fixed in wx SVN 53563, that's wx 2.8.8
+#if !wxCHECK_VERSION(2, 8, 8)
 	// FIXME: EVIL HACK: We need to ensure that the superclass doesn't
 	// try to destroy a dangling pointer. See also CMuleTrayIcon::UpdateTray
 	// for comments on this issue.
@@ -204,6 +207,7 @@ CMuleTrayIcon::~CMuleTrayIcon()
 			m_iconWnd = NULL;
 		}
 	}
+#endif
 #endif
 }
 
@@ -227,7 +231,7 @@ void CMuleTrayIcon::SetTrayIcon(int Icon, uint32 percent)
 			Bar_ySize = Disconnected_Icon_size; 
 			break;
 		default:
-			wxASSERT(0);
+			wxFAIL;
 	}
 
 	// Lookup this values for speed improvement: don't draw if not needed
@@ -249,7 +253,7 @@ void CMuleTrayIcon::SetTrayIcon(int Icon, uint32 percent)
 					CurrentIcon = wxIcon(mule_Tr_grey_big_ico_xpm);
 					break;
 				default:
-					wxASSERT(0);
+					wxFAIL;
 			}
 		}
 
@@ -273,9 +277,7 @@ void CMuleTrayIcon::SetTrayIcon(int Icon, uint32 percent)
 		int Bar_xSize = 4; 
 		int Bar_xPos = CurrentIcon.GetWidth() - 5; 
 		
-		wxColour col= WxColourFromCr( CStatisticsDlg::getColors(11) );
-		wxBrush	brush(col);
-		IconWithSpeed.SetBrush(brush);
+		IconWithSpeed.SetBrush(*(wxTheBrushList->FindOrCreateBrush(CStatisticsDlg::getColors(11))));
 		IconWithSpeed.SetPen(*wxTRANSPARENT_PEN);
 		
 		IconWithSpeed.DrawRectangle(Bar_xPos + 1, Bar_ySize - NewSize, Bar_xSize -2 , NewSize);
@@ -308,6 +310,8 @@ void CMuleTrayIcon::SetTrayToolTip(const wxString& Tip)
 void CMuleTrayIcon::UpdateTray()
 {
 #ifdef __WXGTK__
+	// Issue has been fixed in wx SVN 53563, that's wx 2.8.8
+#if !wxCHECK_VERSION(2, 8, 8)
 	// FIXME: EVIL HACK: As of wxGTK-2.8.7, closing of the trayicon
 	// window (caused for instance by a crashing kicker) is not
 	// handled, with the result that the pointer to the trayicon
@@ -320,14 +324,18 @@ void CMuleTrayIcon::UpdateTray()
 	// http://sourceforge.net/tracker/index.php?func=detail&aid=1872724&group_id=9863&atid=109863
 	if (m_iconWnd) {
 		if (wxTopLevelWindows.IndexOf((wxWindow*)m_iconWnd) == wxNOT_FOUND) {
-			printf("Traybar-icon lost, trying to recreate ...\n");
+			AddLogLineCS(_("Traybar-icon lost, trying to recreate ..."));
 			m_iconWnd = NULL;
 		}
 	}
 #endif
+#endif
 
 	// Icon update and Tip update
-	if (IsOk()) {
+#ifndef __WXCOCOA__
+	if (IsOk()) 
+#endif
+	{
 		SetIcon(CurrentIcon, CurrentTip);
 	}	
 }

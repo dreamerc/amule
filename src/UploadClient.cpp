@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -42,9 +42,9 @@
 #include "ClientList.h"
 #include "Statistics.h"		// Needed for theStats
 #include "Logger.h"
-#include <common/Format.h>
 #include "ScopedPtr.h"		// Needed for CScopedArray
 #include "GuiEvents.h"		// Needed for Notify_*
+#include "FileArea.h"		// Needed for CFileArea
 
 
 //	members of CUpDownClient
@@ -205,18 +205,10 @@ bool CUpDownClient::IsDifferentPartBlock() const // [Tarod 12/22/2002]
 
 void CUpDownClient::CreateNextBlockPackage()
 {
-	// See if we can do an early return. There may be no new blocks to load from disk and add to buffer, or buffer may be large enough allready.
-	if(m_BlockRequests_queue.empty() || // There are no new blocks requested
-		m_addedPayloadQueueSession > GetQueueSessionPayloadUp() && m_addedPayloadQueueSession-GetQueueSessionPayloadUp() > 50*1024) { // the buffered data is large enough allready
-		return;
-	}
-
-	CFile file;
-	CPath fullname;
 	try {
-	// Buffer new data if current buffer is less than 100 KBytes
-	while ((!m_BlockRequests_queue.empty()) &&
-		(m_addedPayloadQueueSession <= GetQueueSessionPayloadUp() || m_addedPayloadQueueSession-GetQueueSessionPayloadUp() < 100*1024)) {
+		// Buffer new data if current buffer is less than 100 KBytes
+		while (!m_BlockRequests_queue.empty()
+			   && m_addedPayloadQueueSession - m_nCurQueueSessionPayloadUp < 100*1024) {
 
 			Requested_Block_Struct* currentblock = m_BlockRequests_queue.front();
 			CKnownFile* srcfile = theApp->sharedfiles->GetFileByID(CMD4Hash(currentblock->FileID));
@@ -225,86 +217,58 @@ void CUpDownClient::CreateNextBlockPackage()
 				throw wxString(wxT("requested file not found"));
 			}
 
-			if (srcfile->IsPartFile() && ((CPartFile*)srcfile)->GetStatus() != PS_COMPLETE) {
-				//#warning This seems a good idea from eMule. We must import this.
-				#if 0
-				// Do not access a part file, if it is currently moved into the incoming directory.
-				// Because the moving of part file into the incoming directory may take a noticable 
-				// amount of time, we can not wait for 'm_FileCompleteMutex' and block the main thread.
-				if (!((CPartFile*)srcfile)->m_FileCompleteMutex.Lock(0)){ // just do a quick test of the mutex's state and return if it's locked.
-					return;
-				}
-				lockFile.m_pObject = &((CPartFile*)srcfile)->m_FileCompleteMutex;
-				// If it's a part file which we are uploading the file remains locked until we've read the
-				// current block. This way the file completion thread can not (try to) "move" the file into
-				// the incoming directory.
-				#endif
+			// Check if this know file is a CPartFile. 
+			// For completed part files IsPartFile() returns false, so they are 
+			// correctly treated as plain CKnownFile.
+			CPartFile* srcPartFile = srcfile->IsPartFile() ? (CPartFile*)srcfile : NULL;
 
-				// Get the full path to the '.part' file
-				fullname = dynamic_cast<CPartFile*>(srcfile)->GetFullName().RemoveExt();
-			} else {
-				fullname = srcfile->GetFilePath().JoinPaths(srcfile->GetFileName());
-			}
-		
-			uint64 togo;
 			// THIS EndOffset points BEHIND the last byte requested
 			// (other than the offsets used in the PartFile code)
 			if (currentblock->EndOffset > srcfile->GetFileSize()) {
-				throw wxString(wxT("Asked for data beyond end of file"));
+				throw wxString(CFormat(wxT("Asked for data up to %d beyond end of file (%d)"))
+									% currentblock->EndOffset % srcfile->GetFileSize());
 			} else if (currentblock->StartOffset > currentblock->EndOffset) { 
-				throw wxString(wxT("Asked for invalid block (start > end)"));
-			} else {
-				togo = currentblock->EndOffset - currentblock->StartOffset;
-				
-				if (srcfile->IsPartFile() && !((CPartFile*)srcfile)->IsComplete(currentblock->StartOffset,currentblock->EndOffset-1)) {
-					throw wxString(wxT("Asked for incomplete block "));
-				}
+				throw wxString(CFormat(wxT("Asked for invalid block (start %d > end %d)"))
+									% currentblock->StartOffset % currentblock->EndOffset);
 			}
 
+			uint64 togo = currentblock->EndOffset - currentblock->StartOffset;
+
 			if (togo > EMBLOCKSIZE * 3) {
-				throw wxString(wxT("Client requested too large of a block."));
+				throw wxString(CFormat(wxT("Client requested too large block (%d > %d)"))
+									% togo % (EMBLOCKSIZE * 3));
 			}
-		
-			CScopedArray<byte> filedata(NULL);	
-			if (!srcfile->IsPartFile()){
+
+			CFileArea area;
+			if (srcPartFile) {
+				if (!srcPartFile->IsComplete(currentblock->StartOffset,currentblock->EndOffset-1)) {
+					throw wxString(CFormat(wxT("Asked for incomplete block (%d - %d)"))
+									% currentblock->StartOffset % (currentblock->EndOffset-1));
+				}
+				if (!srcPartFile->ReadData(area, currentblock->StartOffset, togo)) {
+					throw wxString(wxT("Failed to read from requested partfile"));
+				}
+			} else {
+				CFileAutoClose file;
+				CPath fullname = srcfile->GetFilePath().JoinPaths(srcfile->GetFileName());
 				if ( !file.Open(fullname, CFile::read) ) {
-					// The file was most likely moved/deleted. However it is likely that the
-					// same is true for other files, so we recheck all shared files. 
+					// The file was most likely moved/deleted. So remove it from the list of shared files.
 					AddLogLineM( false, CFormat( _("Failed to open file (%s), removing from list of shared files.") ) % srcfile->GetFileName() );
 					theApp->sharedfiles->RemoveFile(srcfile);
 					
 					throw wxString(wxT("Failed to open requested file: Removing from list of shared files!"));
-				}			
-			
-				file.Seek(currentblock->StartOffset, wxFromStart);
-				
-				filedata.reset(new byte[togo + 500]);
-				file.Read(filedata.get(), togo);
-				file.Close();
-			} else {
-				CPartFile* partfile = (CPartFile*)srcfile;
-				partfile->m_hpartfile.Seek(currentblock->StartOffset);
-				
-				filedata.reset(new byte[togo + 500]);
-				partfile->m_hpartfile.Read(filedata.get(), togo); 
-				// Partfile should NOT be closed!!!
+				}
+				area.ReadAt(file, currentblock->StartOffset, togo);
 			}
+			area.CheckError();
 
-			//#warning Part of the above import.
-			#if 0
-			if (lockFile.m_pObject){
-				lockFile.m_pObject->Unlock(); // Unlock the (part) file as soon as we are done with accessing it.
-				lockFile.m_pObject = NULL;
-			}
-			#endif
-	
 			SetUploadFileID(srcfile);
 
 			// check extention to decide whether to compress or not
 			if (m_byDataCompVer == 1 && GetFiletype(srcfile->GetFileName()) != ftArchive) {
-				CreatePackedPackets(filedata.get(), togo,currentblock);
+				CreatePackedPackets(area.GetBuffer(), togo, currentblock);
 			} else {
-				CreateStandartPackets(filedata.get(), togo,currentblock);
+				CreateStandartPackets(area.GetBuffer(), togo, currentblock);
 			}
 			
 			// file statistic
@@ -320,7 +284,9 @@ void CUpDownClient::CreateNextBlockPackage()
 
 		return;
 	} catch (const wxString& error) {
-		AddDebugLogLineM(false, logClient, wxT("Client '") + GetUserName() + wxT("' caused error while creating packet (") + error + wxT(") - disconnecting client"));
+		AddDebugLogLineM(false, logClient, 
+			CFormat(wxT("Client '%s' (%s) caused error while creating packet (%s) - disconnecting client"))
+				% GetUserName() % GetFullIP() % error);
 	} catch (const CIOFailureException& error) {
 		AddDebugLogLineM(true, logClient, wxT("IO failure while reading requested file: ") + error.what());
 	} catch (const CEOFException& WXUNUSED(error)) {
@@ -372,7 +338,9 @@ void CUpDownClient::CreateStandartPackets(const byte* buffer, uint32 togo, Reque
 		CPacket* packet = new CPacket(data, (bLargeBlocks ? OP_EMULEPROT : OP_EDONKEYPROT), (bLargeBlocks ? (uint8)OP_SENDINGPART_I64 : (uint8)OP_SENDINGPART));	
 		theStats::AddUpOverheadFileRequest(16 + 2 * (bLargeBlocks ? 8 :4));
 		theStats::AddUploadToSoft(GetClientSoft(), nPacketSize);
-		AddDebugLogLineM( false, logLocalClient, wxString::Format(wxT("Local Client: %s to "),(bLargeBlocks ? wxT("OP_SENDINGPART_I64") : wxT("OP_SENDINGPART"))) + GetFullIP() );
+		AddDebugLogLineM(false, logLocalClient, 
+			CFormat(wxT("Local Client: %s to %s"))
+				% (bLargeBlocks ? wxT("OP_SENDINGPART_I64") : wxT("OP_SENDINGPART")) % GetFullIP() );
 		m_socket->SendPacket(packet,true,false, nPacketSize);
 	}
 }
@@ -380,16 +348,15 @@ void CUpDownClient::CreateStandartPackets(const byte* buffer, uint32 togo, Reque
 
 void CUpDownClient::CreatePackedPackets(const byte* buffer, uint32 togo, Requested_Block_Struct* currentblock)
 {
-	byte* output = new byte[togo+300];
 	uLongf newsize = togo+300;
-	uint16 result = compress2(output, &newsize, buffer, togo,9);
+	CScopedArray<byte> output(newsize);
+	uint16 result = compress2(output.get(), &newsize, buffer, togo, 9);
 	if (result != Z_OK || togo <= newsize){
-		delete[] output;
 		CreateStandartPackets(buffer, togo, currentblock);
 		return;
 	}
 	
-	CMemFile memfile(output,newsize);
+	CMemFile memfile(output.get(), newsize);
 	
 	uint32 totalPayloadSize = 0;
 	uint32 oldSize = togo;
@@ -435,10 +402,11 @@ void CUpDownClient::CreatePackedPackets(const byte* buffer, uint32 togo, Request
 		// put packet directly on socket
 		theStats::AddUpOverheadFileRequest(24);
 		theStats::AddUploadToSoft(GetClientSoft(), nPacketSize);
-		AddDebugLogLineM( false, logLocalClient, wxString::Format(wxT("Local Client: %s to "), (isLargeBlock ? wxT("OP_COMPRESSEDPART_I64") : wxT("OP_COMPRESSEDPART"))) + GetFullIP() );
+		AddDebugLogLineM(false, logLocalClient, 
+			CFormat(wxT("Local Client: %s to %s"))
+				% (isLargeBlock ? wxT("OP_COMPRESSEDPART_I64") : wxT("OP_COMPRESSEDPART")) % GetFullIP() );
 		m_socket->SendPacket(packet,true,false, payloadSize);			
 	}
-	delete[] output;
 }
 
 
@@ -606,6 +574,20 @@ void CUpDownClient::ClearWaitStartTime()
 }
 
 
+void CUpDownClient::ResetSessionUp()
+{
+	m_nCurSessionUp = m_nTransferredUp;
+	m_addedPayloadQueueSession = 0;
+	m_nCurQueueSessionPayloadUp = 0;
+	// If upload was resumed there can be a remaining payload in the socket
+	// causing (prepared - sent) getting negative. So reset the counter here.
+	if (m_socket) {
+		CEMSocket* s = m_socket;
+		s->GetSentPayloadSinceLastCallAndReset();
+	}
+}
+
+
 uint32 CUpDownClient::SendBlockData()
 {
     uint32 curTick = ::GetTickCount();
@@ -631,7 +613,7 @@ uint32 CUpDownClient::SendBlockData()
         m_nCurQueueSessionPayloadUp += sentBytesPayload;
 
         if (theApp->uploadqueue->CheckForTimeOver(this)) {
-            theApp->uploadqueue->RemoveFromUploadQueue(this, true);
+            theApp->uploadqueue->RemoveFromUploadQueue(this);
 			SendOutOfPartReqsAndAddToWaitingQueue();
         } else {
             // read blocks from file and put on socket
@@ -904,9 +886,9 @@ void CUpDownClient::ProcessRequestPartsPacket(const byte* pachPacket, uint32 nSi
 	
 	for (unsigned int i = 0; i < itemsof(auStartOffsets); i++) {
 		AddDebugLogLineM(false, logClient,
-			wxString::Format(wxT("Client requests %u"), i)
-			+ wxT(" ") + wxString::Format(wxT("File block %u-%u (%d bytes):"), auStartOffsets[i], auEndOffsets[i], auEndOffsets[i] - auStartOffsets[i])
-			+ wxT(" ") + GetFullIP());
+			CFormat(wxT("Client %s requests %d File block %d-%d (%d bytes):"))
+				% GetFullIP() % i % auStartOffsets[i] % auEndOffsets[i] 
+				% (auEndOffsets[i] - auStartOffsets[i]));
 		if (auEndOffsets[i] > auStartOffsets[i]) {
 			Requested_Block_Struct* reqblock = new Requested_Block_Struct;
 			reqblock->StartOffset = auStartOffsets[i];
@@ -935,14 +917,15 @@ void CUpDownClient::ProcessRequestPartsPacketv2(const CMemFile& data) {
 			// We have to do +1, because the block matching uses that.
 			reqblock->EndOffset = data.GetIntTagValue() + 1;
 			if ((reqblock->StartOffset || reqblock->EndOffset) && (reqblock->StartOffset > reqblock->EndOffset)) {
-				AddDebugLogLineM(false, logClient, wxString::Format(wxT("Client request is invalid! %i / %i"),reqblock->StartOffset, reqblock->EndOffset));
+				AddDebugLogLineM(false, logClient, CFormat(wxT("Client %s request is invalid! %d / %d"))
+					% GetFullIP() % reqblock->StartOffset % reqblock->EndOffset);
 				throw wxString(wxT("Client request is invalid!"));
 			}
 			
 			AddDebugLogLineM(false, logClient,
-				wxString::Format(wxT("Client requests %u"), i)
-				+ wxT(" ") + wxString::Format(wxT("File block %u-%u (%d bytes):"),reqblock->StartOffset, reqblock->EndOffset, reqblock->EndOffset - reqblock->StartOffset)
-				+= wxT(" ") + GetFullIP());
+				CFormat(wxT("Client %s requests %d File block %d-%d (%d bytes):"))
+					% GetFullIP() % i % reqblock->StartOffset % reqblock->EndOffset
+					% (reqblock->EndOffset - reqblock->StartOffset));
 			
 			md4cpy(reqblock->FileID, reqfilehash.GetHash());
 			reqblock->transferred = 0;

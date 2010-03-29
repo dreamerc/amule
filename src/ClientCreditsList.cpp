@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -57,11 +57,7 @@ CClientCreditsList::CClientCreditsList()
 
 CClientCreditsList::~CClientCreditsList()
 {
-	ClientMap::iterator it = m_mapClients.begin();
-	for ( ; it != m_mapClients.end(); ++it ){
-		delete it->second;
-	}
-	m_mapClients.clear();
+	DeleteContents(m_mapClients);
 	delete static_cast<CryptoPP::RSASSA_PKCS1v15_SHA_Signer *>(m_pSignkey);
 }
 
@@ -143,12 +139,7 @@ void CClientCreditsList::LoadList()
 				// and will have to discard it.
 				delete newcstruct;
 				
-				// Remove already read, and possibly invalid, entries
-				ClientMap::iterator it = m_mapClients.begin();
-				for ( ; it != m_mapClients.end(); ++it ){
-					delete it->second;
-				}
-				m_mapClients.clear();
+				DeleteContents(m_mapClients);
 				
 				AddDebugLogLineM( true, logCredits,
 					wxT("WARNING: Corruptions found while reading Creditfile!") );
@@ -281,7 +272,7 @@ bool CClientCreditsList::CreateKeyPair()
 		AddDebugLogLineM(true, logCredits,
 			wxString(wxT("Failed to create new RSA keypair: ")) +
 			char2unicode(e.what()));
-		wxASSERT(false);
+		wxFAIL;
  		return false;
  	}
 	
@@ -376,7 +367,7 @@ uint8 CClientCreditsList::CreateSignature(CClientCredits* pTarget, byte* pachOut
 		return asink.TotalPutLength();			
 	} catch (const CryptoPP::Exception& e) {
 		AddDebugLogLineM(true, logCredits, wxString(wxT("Error while creating signature: ")) + char2unicode(e.what()));
-		wxASSERT(false);
+		wxFAIL;
 		
 		return 0;
  	}

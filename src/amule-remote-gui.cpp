@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (C) 2005-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2005-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -21,13 +21,6 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301, USA
 //
-
-
-#define AMULE_REMOTE_GUI_CPP
-
-
-#include <memory>			// Needed for auto_ptr
-using std::auto_ptr;
 
 
 #include <wx/ipc.h>
@@ -54,6 +47,7 @@ using std::auto_ptr;
 #ifdef ENABLE_IP2COUNTRY
 	#include "IP2Country.h"		// Needed for IP2Country
 #endif
+#include "InternalEvents.h"	// Needed for wxEVT_CORE_FINISHED_HTTP_DOWNLOAD
 #include "Logger.h"
 #include "muuli_wdr.h"			// Needed for IDs
 #include "PartFile.h"			// Needed for CPartFile
@@ -65,7 +59,7 @@ using std::auto_ptr;
 #include "TransferWnd.h"		// Needed for CTransferWnd
 #include "updownclient.h"
 #include "ServerListCtrl.h"		// Needed for CServerListCtrl
-#include "MagnetURI.h"			// Needed for CMagnetURI
+#include "ScopedPtr.h"
 
 
 CEConnectDlg::CEConnectDlg()
@@ -125,7 +119,11 @@ BEGIN_EVENT_TABLE(CamuleRemoteGuiApp, wxApp)
 	EVT_CUSTOM(wxEVT_EC_INIT_DONE, -1, CamuleRemoteGuiApp::OnECInitDone)
 	
 	EVT_MULE_NOTIFY(CamuleRemoteGuiApp::OnNotifyEvent)
-	EVT_MULE_LOGGING(CamuleRemoteGuiApp::OnLoggingEvent)
+
+#ifdef ENABLE_IP2COUNTRY
+	// HTTPDownload finished
+	EVT_MULE_INTERNAL(wxEVT_CORE_FINISHED_HTTP_DOWNLOAD, -1, CamuleRemoteGuiApp::OnFinishedHTTPDownload)
+#endif
 END_EVENT_TABLE()
 
 
@@ -167,12 +165,7 @@ void CamuleRemoteGuiApp::OnPollTimer(wxTimerEvent&)
 		} else if (amuledlg->m_serverwnd->IsShown()) {
 			//serverlist->FullReload(EC_OP_GET_SERVER_LIST);
 		} else if (amuledlg->m_transferwnd->IsShown()) {
-			static bool firstcall = true;
-			downloadqueue->DoRequery(
-				theApp->m_FileDetailDialogActive || firstcall ?
-					EC_OP_GET_DLOAD_QUEUE_DETAIL : EC_OP_GET_DLOAD_QUEUE,
-				EC_TAG_PARTFILE);
-			firstcall = false;
+			downloadqueue->DoRequery(EC_OP_GET_DLOAD_QUEUE,	EC_TAG_PARTFILE);
 			switch(amuledlg->m_transferwnd->clientlistctrl->GetListView()) {
 			case vtUploading:
 				uploadqueue->ReQueryUp();
@@ -195,9 +188,28 @@ void CamuleRemoteGuiApp::OnPollTimer(wxTimerEvent&)
 		request_step = 0;
 		break;
 	default:
-		printf("WTF?\n");
+		AddLogLineCS(wxT("WTF?")); // should not happen. :-)
 		request_step = 0;
 	}
+
+	// Check for new links once per second.
+	static uint32 lastED2KLinkCheck = 0;
+	if (GetTickCount() - lastED2KLinkCheck >= 1000) {
+		AddLinksFromFile();
+		lastED2KLinkCheck = GetTickCount();
+	}
+}
+
+
+void CamuleRemoteGuiApp::OnFinishedHTTPDownload(CMuleInternalEvent& event)
+{
+#ifdef ENABLE_IP2COUNTRY
+	if (event.GetInt() == HTTP_GeoIP) {
+		amuledlg->IP2CountryDownloadFinished(event.GetExtraLong());
+		// If we updated, the dialog is already up. Redraw it to show the flags.
+		amuledlg->Refresh();
+	}
+#endif	
 }
 
 
@@ -224,9 +236,6 @@ bool CamuleRemoteGuiApp::OnInit()
 {
 	StartTickTimer();
 	amuledlg = NULL;
-	if ( !wxApp::OnInit() ) {
-		return false;
-	}
 	
 	// Get theApp
 	theApp = &wxGetApp();
@@ -234,55 +243,53 @@ bool CamuleRemoteGuiApp::OnInit()
 	// Handle uncaught exceptions
 	InstallMuleExceptionHandler();
 
+	// Parse cmdline arguments.
+	if (!InitCommon(AMULE_APP_BASE::argc, AMULE_APP_BASE::argv)) {
+		return false;
+	}
+
 	// Create the polling timer
 	poll_timer = new wxTimer(this,ID_CORE_TIMER_EVENT);
 	if (!poll_timer) {
-		printf("Fatal Error: Failed to create Poll Timer");
+		AddLogLineCS(_("Fatal Error: Failed to create Poll Timer"));
 		OnExit();
 	}
 
 	m_connect = new CRemoteConnect(this);
-	SetAppName(wxT("aMule"));
 	
-	// Load Preferences
-	// This creates the CFG file we shall use
-	ConfigDir = GetConfigDir();
-	if (!wxDirExists(ConfigDir)) {
-		wxMkdir(ConfigDir);
-	}
-
-	wxConfig::Set(new wxFileConfig(wxEmptyString, wxEmptyString,
-		ConfigDir + wxT("remote.conf")));
-
 	glob_prefs = new CPreferencesRem(m_connect);	
 	
 	InitCustomLanguages();
 	InitLocale(m_locale, StrLang2wx(thePrefs::GetLanguageID()));
 
-	bool result = ShowConnectionDialog();
-
-	printf("Going to event loop...\n");
+	if (ShowConnectionDialog()) {
+		AddLogLineNS(_("Going to event loop..."));
+		return true;
+	}
 	
-	return result;
+	return false;
 }
 
 
 bool CamuleRemoteGuiApp::CryptoAvailable() const
 {
-	return clientcredits && clientcredits->CryptoAvailable();
+	return thePrefs::IsSecureIdentEnabled(); // good enough
 }
 
 
-bool CamuleRemoteGuiApp::ShowConnectionDialog() {
-	
+bool CamuleRemoteGuiApp::ShowConnectionDialog()
+{
 	dialog = new CEConnectDlg;
 
-	if (dialog->ShowModal() != wxID_OK) {
+	if (m_skipConnectionDialog) {
+		wxCommandEvent evt;
+		dialog->OnOK(evt);
+	} else if (dialog->ShowModal() != wxID_OK) {
 		dialog->Destroy();
 		
 		return false;
 	}
-	printf("Connecting...\n");
+	AddLogLineNS(_("Connecting..."));
 	if (!m_connect->ConnectToCore(dialog->Host(), dialog->Port(),
 		dialog->Login(), dialog->PassHash(),
 		wxT("amule-remote"), wxT("0x0001"))) {
@@ -297,17 +304,21 @@ bool CamuleRemoteGuiApp::ShowConnectionDialog() {
 
 void CamuleRemoteGuiApp::OnECConnection(wxEvent& event) {
 	wxECSocketEvent& evt = *((wxECSocketEvent*)&event);
-	printf("Remote GUI EC event handler\n");
+	AddLogLineNS(_("Remote GUI EC event handler"));
 	wxString reply = evt.GetServerReply();
 	AddLogLineM(true, reply);
 	if (evt.GetResult() == true) {
 		// Connected - go to next init step
 		glob_prefs->LoadRemote();
 	} else {
-		printf("Going down\n");
-		wxMessageBox(
+		AddLogLineNS(_("Going down"));
+		if (dialog) {	// connect failed
+			wxMessageBox(
 			(CFormat(_("Connection Failed. Unable to connect to %s:%d\n")) % dialog->Host() % dialog->Port()) + reply,
 			_("ERROR"), wxOK);
+		} else {		// server disconnected (probably terminated) later
+			wxMessageBox(_("Connection closed - aMule has terminated probably."), _("ERROR"), wxOK);
+		}
 		ExitMainLoop();
 	}
 }
@@ -316,12 +327,6 @@ void CamuleRemoteGuiApp::OnECConnection(wxEvent& event) {
 void CamuleRemoteGuiApp::OnECInitDone(wxEvent& )
 {
 	Startup();
-}
-
-
-void CamuleRemoteGuiApp::OnLoggingEvent(CLoggingEvent& evt)
-{
-	printf("LOG: %s\n", unicode2char(evt.Message()).data());
 }
 
 
@@ -339,6 +344,7 @@ void CamuleRemoteGuiApp::Startup() {
 		wxConfig::Get()->Write(wxT("/EC/Password"), dialog->PassHash());
 	}
 	dialog->Destroy();
+	dialog = NULL;
 	
 	m_ConnState = 0;
 	m_clientID  = 0;
@@ -353,30 +359,13 @@ void CamuleRemoteGuiApp::Startup() {
 	sharedfiles	= new CSharedFilesRem(m_connect);
 	knownfiles = new CKnownFilesRem(sharedfiles);
 
-	clientcredits = new CClientCreditsRem();
-	
 	// bugfix - do this before creating the uploadqueue
 	downloadqueue = new CDownQueueRem(m_connect);
 	uploadqueue = new CUpQueueRem(m_connect);
 	ipfilter = new CIPFilterRem(m_connect);
 
-	// Parse cmdline arguments.
-	wxCmdLineParser cmdline(wxApp::argc, wxApp::argv);
-	cmdline.AddSwitch(wxT("v"), wxT("version"),
-		wxT("Displays the current version number."));
-	cmdline.AddSwitch(wxT("h"), wxT("help"),
-		wxT("Displays this information."));
-	cmdline.AddOption(wxT("geometry"), wxEmptyString, wxT("Sets the geometry of the app.\n\t\t\t<str> uses the same format as standard X11 apps:\n\t\t\t[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]"));
-	cmdline.Parse();
-	
-	bool geometry_enabled = false;
-	wxString geom_string;
-	if (cmdline.Found(wxT("geometry"), &geom_string)) {
-		geometry_enabled = true;
-	}
-	
 	// Create main dialog
-	InitGui(0, geom_string);
+	InitGui(m_geometryEnabled, m_geometryString);
 
 	// Forward wxLog events to CLogger
 	wxLog::SetActiveTarget(new CLoggerTarget);
@@ -386,19 +375,32 @@ void CamuleRemoteGuiApp::Startup() {
 	// Start the Poll Timer
 	poll_timer->Start(1000);	
 	amuledlg->StartGuiTimer();
+
+	// Now activate GeoIP, so that the download dialog doesn't get destroyed immediately 
+#ifdef ENABLE_IP2COUNTRY
+	if (thePrefs::IsGeoIPEnabled()) {
+		amuledlg->m_IP2Country->Enable();
+	}
+#endif
 }
 
 
-void CamuleRemoteGuiApp::ShowAlert(wxString msg, wxString title, int flags)
+int CamuleRemoteGuiApp::ShowAlert(wxString msg, wxString title, int flags)
 {
-	CamuleGuiBase::ShowAlert(msg, title, flags);
+	return CamuleGuiBase::ShowAlert(msg, title, flags);
 }
 
+
+void CamuleRemoteGuiApp::AddRemoteLogLine(const wxString& line)
+{
+	amuledlg->AddLogLine(line);
+}
 
 int CamuleRemoteGuiApp::InitGui(bool geometry_enabled, wxString &geom_string)
 {
 	CamuleGuiBase::InitGui(geometry_enabled, geom_string);
 	SetTopWindow(amuledlg);
+	AddLogLineN(_("Ready")); // The first log line after the window is up triggers output of all the ones before
 	return 0;
 }
 
@@ -424,84 +426,6 @@ wxString CamuleRemoteGuiApp::GetLog(bool)
 wxString CamuleRemoteGuiApp::GetServerLog(bool)
 {
 	return wxEmptyString;
-}
-
-
-wxString CamuleRemoteGuiApp::CreateMagnetLink(const CAbstractFile* f)
-{
-	// TODO: Remove duplicate code (also in amule.cpp) ... 
-	CMagnetURI uri;
-
-	uri.AddField(wxT("dn"), f->GetFileName().Cleanup(false).GetPrintable());
-	uri.AddField(wxT("xt"), wxString(wxT("urn:ed2k:")) + f->GetFileHash().Encode().Lower());
-	uri.AddField(wxT("xt"), wxString(wxT("urn:ed2khash:")) + f->GetFileHash().Encode().Lower());
-	uri.AddField(wxT("xl"), wxString::Format(wxT("%") wxLongLongFmtSpec wxT("u"), f->GetFileSize()));
-
-	return uri.GetLink();
-}
-
-wxString CamuleRemoteGuiApp::CreateED2kLink(const CAbstractFile* f, bool add_source, bool use_hostname, bool addcryptoptions)
-{
-	// TODO: Avoid duplicate code (also in amule.cpp) ... 
-	wxASSERT(!(!add_source && (use_hostname || addcryptoptions)));
-	// Construct URL like this: ed2k://|file|<filename>|<size>|<hash>|/
-	wxString strURL = CFormat(wxT("ed2k://|file|%s|%i|%s|/"))
-		% f->GetFileName().Cleanup(false)
-		% f->GetFileSize() % f->GetFileHash().Encode();
-	
-	if (add_source && IsConnected() && !IsFirewalled()) {
-		// Create the first part of the URL
-		strURL << wxT("|sources,");
-
-		if (use_hostname) {
-			strURL << thePrefs::GetYourHostname();
-		} else {
-			uint32 clientID = GetID();
-			strURL << (uint8) clientID << wxT(".") <<
-			(uint8)(clientID >> 8) << wxT(".") <<
-			(uint8)(clientID >> 16) << wxT(".") <<
-			(uint8)(clientID >> 24);
-		}
-		
- 		strURL << wxT(":") <<
-			thePrefs::GetPort();
-		
-		if (addcryptoptions) {
-			const uint8 uSupportsCryptLayer	= thePrefs::IsClientCryptLayerSupported() ? 1 : 0;
-			const uint8 uRequestsCryptLayer	= thePrefs::IsClientCryptLayerRequested() ? 1 : 0;
-			const uint8 uRequiresCryptLayer	= thePrefs::IsClientCryptLayerRequired() ? 1 : 0;
-			const uint8 byCryptOptions = (uRequiresCryptLayer << 2) | (uRequestsCryptLayer << 1) | (uSupportsCryptLayer << 0) | (uSupportsCryptLayer ? 0x80 : 0x00);
-			
-			strURL << wxT(":") << byCryptOptions;
-			
-			if (byCryptOptions & 0x80) {
-				strURL << wxT(":") << thePrefs::GetUserHash().Encode();
-			}
-			
-		}
-		strURL << wxT("|/");
-	} else if (add_source) {
-		AddLogLineM(true, _("WARNING: You can't add yourself as a source for an eD2k link while having a lowid."));
-	}
-
-	// Result is "ed2k://|file|<filename>|<size>|<hash>|/|sources,[(<ip>|<hostname>):<port>[:cryptoptions[:hash]]]|/"
-	return strURL;
-}
-
-
-wxString CamuleRemoteGuiApp::CreateED2kAICHLink(const CKnownFile* f)
-{
-	// TODO: Avoid duplicate code (also in amule.cpp) ... 
-	// Create the first part of the URL
-	wxString strURL = CreateED2kLink(f);
-	// Append the AICH info
-	if (f->HasProperAICHHashSet()) {
-		strURL.RemoveLast();		// remove trailing '/'
-		strURL << wxT("h=") << f->GetAICHMasterHash() << wxT("|/");
-	}	
-
-	// Result is "ed2k://|file|<filename>|<size>|<hash>|h=<AICH master hash>|/"
-	return strURL;
 }
 
 
@@ -576,10 +500,21 @@ uint32 CamuleRemoteGuiApp::GetID() const
 
 
 void CamuleRemoteGuiApp::ShowUserCount() {
-	wxString buffer =
-		CFormat(_("Users: E: %s K: %s | Files E: %s K: %s")) % CastItoIShort(theStats::GetED2KUsers()) % 
-		CastItoIShort(theStats::GetKadUsers()) % CastItoIShort(theStats::GetED2KFiles()) % CastItoIShort(theStats::GetKadFiles());
+	wxString buffer;
 	
+	static const wxString s_singlenetstatusformat = _("Users: %s | Files: %s");
+	static const wxString s_bothnetstatusformat = _("Users: E: %s K: %s | Files: E: %s K: %s");
+	
+	if (thePrefs::GetNetworkED2K() && thePrefs::GetNetworkKademlia()) {
+		buffer = CFormat(s_bothnetstatusformat) % CastItoIShort(theStats::GetED2KUsers()) % CastItoIShort(theStats::GetKadUsers()) % CastItoIShort(theStats::GetED2KFiles()) % CastItoIShort(theStats::GetKadFiles());
+	} else if (thePrefs::GetNetworkED2K()) {
+		buffer = CFormat(s_singlenetstatusformat) % CastItoIShort(theStats::GetED2KUsers()) % CastItoIShort(theStats::GetED2KFiles());
+	} else if (thePrefs::GetNetworkKademlia()) {
+		buffer = CFormat(s_singlenetstatusformat) % CastItoIShort(theStats::GetKadUsers()) % CastItoIShort(theStats::GetKadFiles());
+	} else {
+		buffer = _("No networks selected");
+	}
+
 	Notify_ShowUserCount(buffer);
 }
 
@@ -594,9 +529,6 @@ CPreferencesRem::CPreferencesRem(CRemoteConnect *conn)
 {
 	m_conn = conn;
 
-	CPreferences::BuildItemList(theApp->ConfigDir);
-	CPreferences::LoadAllItems(wxConfigBase::Get());
-	
 	//
 	// Settings queried from remote side
 	//
@@ -608,6 +540,7 @@ CPreferencesRem::CPreferencesRem(CRemoteConnect *conn)
 		EC_PREFS_SERVERS |
 		EC_PREFS_FILES |
 		EC_PREFS_SRCDROP |
+		EC_PREFS_DIRECTORIES |
 		EC_PREFS_SECURITY |
 		EC_PREFS_CORETWEAKS |
 		EC_PREFS_REMOTECONTROLS |
@@ -623,7 +556,7 @@ void CPreferencesRem::HandlePacket(const CECPacket *packet)
 	((CEC_Prefs_Packet *)packet)->Apply();
 
 	if ( packet->GetTagByName(EC_TAG_PREFS_CATEGORIES) != 0 ) {
-		for (int i = 0; i < packet->GetTagByName(EC_TAG_PREFS_CATEGORIES)->GetTagCount(); i++) {
+		for (size_t i = 0; i < packet->GetTagByName(EC_TAG_PREFS_CATEGORIES)->GetTagCount(); i++) {
 			const CECTag *cat_tag = packet->GetTagByName(EC_TAG_PREFS_CATEGORIES)->GetTagByIndex(i);
 			Category_Struct *cat = new Category_Struct;
 			cat->title = cat_tag->GetTagByName(EC_TAG_CATEGORY_TITLE)->GetStringData();
@@ -668,7 +601,33 @@ void CPreferencesRem::SendToRemote()
 }
 
 
-Category_Struct *CPreferencesRem::CreateCategory(
+class CCatHandler : public CECPacketHandlerBase {
+	virtual void HandlePacket(const CECPacket *packet);
+};
+
+
+void CCatHandler::HandlePacket(const CECPacket *packet)
+{
+	if (packet->GetOpCode() == EC_OP_FAILED) {
+		const CECTag * catTag = packet->GetTagByName(EC_TAG_CATEGORY);
+		const CECTag * pathTag = packet->GetTagByName(EC_TAG_CATEGORY_PATH);
+		if (catTag && pathTag && catTag->GetInt() < theApp->glob_prefs->GetCatCount()) {
+			int cat = catTag->GetInt();
+			Category_Struct* cs = theApp->glob_prefs->GetCategory(cat);
+			wxMessageBox(CFormat(_("Can't create directory '%s' for category '%s', keeping directory '%s'."))
+				% cs->path.GetPrintable() % cs->title % pathTag->GetStringData(), 
+				_("ERROR"), wxOK);
+			cs->path = CPath(pathTag->GetStringData());
+			theApp->amuledlg->m_transferwnd->UpdateCategory(cat);
+			theApp->amuledlg->m_transferwnd->downloadlistctrl->Refresh();
+		}
+	}
+	delete this;
+}
+
+
+bool CPreferencesRem::CreateCategory(
+	Category_Struct *& category,
 	const wxString& name,
 	const CPath& path,
 	const wxString& comment,
@@ -678,9 +637,9 @@ Category_Struct *CPreferencesRem::CreateCategory(
 	CECPacket req(EC_OP_CREATE_CATEGORY);
 	CEC_Category_Tag tag(0xffffffff, name, path.GetRaw(), comment, color, prio);
 	req.AddTag(tag);
-	m_conn->SendPacket(&req);
+	m_conn->SendRequest(new CCatHandler, &req);
 
-	Category_Struct *category = new Category_Struct();
+	category = new Category_Struct();
 	category->path		= path;
 	category->title		= name;
 	category->comment	= comment;
@@ -689,11 +648,11 @@ Category_Struct *CPreferencesRem::CreateCategory(
 			
 	AddCat(category);
 	
-	return category;
+	return true;
 }
 
 
-void CPreferencesRem::UpdateCategory(
+bool CPreferencesRem::UpdateCategory(
 	uint8 cat,
 	const wxString& name,
 	const CPath& path,
@@ -704,7 +663,7 @@ void CPreferencesRem::UpdateCategory(
 	CECPacket req(EC_OP_UPDATE_CATEGORY);
 	CEC_Category_Tag tag(cat, name, path.GetRaw(), comment, color, prio);
 	req.AddTag(tag);
-	m_conn->SendPacket(&req);
+	m_conn->SendRequest(new CCatHandler, &req);
 
 	Category_Struct *category = m_CatList[cat];
 	category->path		= path;
@@ -712,6 +671,8 @@ void CPreferencesRem::UpdateCategory(
 	category->comment	= comment;
 	category->color		= color;
 	category->prio		= prio;
+
+	return true;
 }
 
 
@@ -763,7 +724,7 @@ void CServerConnectRem::ConnectToServer(CServer *server)
 
 bool CServerConnectRem::ReQuery()
 {
-	CECPacket stat_req(EC_OP_STAT_REQ);
+	CECPacket stat_req(EC_OP_GET_CONNSTATE);
 	m_Conn->SendRequest(this, &stat_req);
 
 	return true;
@@ -826,7 +787,7 @@ void CServerConnectRem::HandlePacket(const CECPacket *packet)
  */
 CServerListRem::CServerListRem(CRemoteConnect *conn)
 :
-CRemoteContainer<CServer, uint32, CEC_Server_Tag>(conn)
+CRemoteContainer<CServer, uint32, CEC_Server_Tag>(conn, false)
 {
 }
 
@@ -856,7 +817,7 @@ void CServerListRem::SaveServerMet()
 void CServerListRem::FilterServers()
 {
 	// FIXME: add code
-	//wxASSERT(0);
+	//wxFAIL;
 }
 
 
@@ -871,11 +832,6 @@ void CServerListRem::UpdateUserFileStatus(CServer *server)
 	if (server) {
 		m_TotalUser = server->GetUsers();
 		m_TotalFile = server->GetFiles();
-		
-		wxString buffer = 
-			CFormat(_("Total Users: %s | Total Files: %s")) % CastItoIShort(m_TotalUser) % CastItoIShort(m_TotalFile);
-		
-		Notify_ShowUserCount(buffer);
 	}
 }
 
@@ -900,7 +856,7 @@ CServer *CServerListRem::CreateItem(CEC_Server_Tag *tag)
 
 void CServerListRem::DeleteItem(CServer *in_srv)
 {
-	auto_ptr<CServer> srv(in_srv);
+	CScopedPtr<CServer> srv(in_srv);
 	theApp->amuledlg->m_serverwnd->serverlistctrl->RemoveServer(srv.get());
 }
 
@@ -914,7 +870,7 @@ uint32 CServerListRem::GetItemID(CServer *server)
 void CServerListRem::ProcessItemUpdate(CEC_Server_Tag *, CServer *)
 {
 	// server list is always realoaded from scratch
-	wxASSERT(0);
+	wxFAIL;
 }
 
 
@@ -940,17 +896,19 @@ void CIPFilterRem::Reload()
 }
 
 
-void CIPFilterRem::Update(wxString WXUNUSED(url))
+void CIPFilterRem::Update(wxString url)
 {
-	// FIXME: add command
-	//wxASSERT(0);
+	CECPacket req(EC_OP_IPFILTER_UPDATE);
+	req.AddTag(CECTag(EC_TAG_STRING, url));
+	
+	m_conn->SendPacket(&req);
 }
 
 
 /*
  * Shared files list
  */
-CSharedFilesRem::CSharedFilesRem(CRemoteConnect *conn) : CRemoteContainer<CKnownFile, CMD4Hash, CEC_SharedFile_Tag>(conn, true)
+CSharedFilesRem::CSharedFilesRem(CRemoteConnect *conn) : CRemoteContainer<CKnownFile, uint32, CEC_SharedFile_Tag>(conn, true)
 {
 	m_rename_file = NULL;
 }
@@ -998,7 +956,7 @@ void CSharedFilesRem::HandlePacket(const CECPacket *packet)
 		m_rename_file->SetFileName(CPath(m_new_name));
 		m_rename_file = NULL;
 	} else if (packet->GetOpCode() != EC_OP_FAILED) {
-		CRemoteContainer<CKnownFile, CMD4Hash, CEC_SharedFile_Tag>::HandlePacket(packet);
+		CRemoteContainer<CKnownFile, uint32, CEC_SharedFile_Tag>::HandlePacket(packet);
 	}
 }
 
@@ -1007,7 +965,7 @@ CKnownFile *CSharedFilesRem::CreateItem(CEC_SharedFile_Tag *tag)
 {
 	CKnownFile *file = new CKnownFile(tag);
 
-	m_enc_map[file->GetFileHash()] = RLE_Data(file->GetPartCount(), true);
+	m_enc_map[file->ECID()] = RLE_Data(file->GetPartCount(), true);
 
 	ProcessItemUpdate(tag, file);
 	
@@ -1019,53 +977,47 @@ CKnownFile *CSharedFilesRem::CreateItem(CEC_SharedFile_Tag *tag)
 
 void CSharedFilesRem::DeleteItem(CKnownFile *in_file)
 {
-	auto_ptr<CKnownFile> file(in_file);
+	CScopedPtr<CKnownFile> file(in_file);
 
-	m_enc_map.erase(file->GetFileHash());
+	m_enc_map.erase(file->ECID());
 	
 	theApp->amuledlg->m_sharedfileswnd->sharedfilesctrl->RemoveFile(file.get());
 }
 
 
-CMD4Hash CSharedFilesRem::GetItemID(CKnownFile *file)
+uint32 CSharedFilesRem::GetItemID(CKnownFile *file)
 {
-	return file->GetFileHash();
+	return file->ECID();
 }
 
 
 void CSharedFilesRem::ProcessItemUpdate(CEC_SharedFile_Tag *tag, CKnownFile *file)
 {
 	CECTag *parttag = tag->GetTagByName(EC_TAG_PARTFILE_PART_STATUS);
-	const unsigned char *data =
-		m_enc_map[file->GetFileHash()].Decode(
-			(unsigned char *)parttag->GetTagData(),
-			parttag->GetTagDataLen());
-	for(int i = 0; i < file->GetPartCount(); ++i) {
-		file->m_AvailPartFrequency[i] = data[i];
+	if (parttag) {
+		const uint8 *data =	m_enc_map[file->ECID()].Decode(
+				(uint8 *)parttag->GetTagData(),
+				parttag->GetTagDataLen());
+		for(int i = 0; i < file->GetPartCount(); ++i) {
+			file->m_AvailPartFrequency[i] = data[i];
+		}
 	}
-	if (m_inc_tags) {
-		tag->SetRequests(file->statistic.requested);
-		tag->SetAllRequests(file->statistic.alltimerequested);
-		tag->SetAccepts(file->statistic.accepted);
-		tag->SetAllAccepts(file->statistic.alltimeaccepted);
-		tag->SetXferred(file->statistic.transferred );
-		tag->SetAllXferred(file->statistic.alltimetransferred);
-		tag->SetPrio(file->m_iUpPriority);
-	} else {
-		file->statistic.requested = tag->GetRequests();
-		file->statistic.alltimerequested = tag->GetAllRequests();
-		file->statistic.accepted = tag->GetAccepts();
-		file->statistic.alltimeaccepted = tag->GetAllAccepts();
-		file->statistic.transferred = tag->GetXferred();
-		file->statistic.alltimetransferred = tag->GetAllXferred();
-		file->m_iUpPriority = tag->Prio();
-	}
-	if (file->m_iUpPriority >= 10) {
-		file->m_iUpPriority -= 10;
+	tag->GetRequests(&file->statistic.requested);
+	tag->GetAllRequests(&file->statistic.alltimerequested);
+	tag->GetAccepts(&file->statistic.accepted);
+	tag->GetAllAccepts(&file->statistic.alltimeaccepted);
+	tag->GetXferred(&file->statistic.transferred);
+	tag->GetAllXferred(&file->statistic.alltimetransferred);
+	tag->Prio(&file->m_iUpPriorityEC);
+	if (file->m_iUpPriorityEC >= 10) {
+		file->m_iUpPriority = file->m_iUpPriorityEC - 10;
 		file->m_bAutoUpPriority = true;
 	} else {
+		file->m_iUpPriority = file->m_iUpPriorityEC;
 		file->m_bAutoUpPriority = false;
 	}
+	tag->GetCompleteSourcesLow(&file->m_nCompleteSourcesCountLo);
+	tag->GetCompleteSourcesHigh(&file->m_nCompleteSourcesCountHi);
 
 	theApp->knownfiles->requested += file->statistic.requested;
 	theApp->knownfiles->transferred += file->statistic.transferred;
@@ -1100,21 +1052,21 @@ void CSharedFilesRem::SetFilePrio(CKnownFile *file, uint8 prio)
  */
 CUpDownClientListRem::CUpDownClientListRem(CRemoteConnect *conn, int viewtype)
 :
-CRemoteContainer<CUpDownClient, uint32, CEC_UpDownClient_Tag>(conn)
+CRemoteContainer<CUpDownClient, uint32, CEC_UpDownClient_Tag>(conn, true)
 {
 	m_viewtype = viewtype;
 }
 
 
-CUpDownClient::CUpDownClient(CEC_UpDownClient_Tag *tag)
+CUpDownClient::CUpDownClient(CEC_UpDownClient_Tag *tag) : CECID(tag->ID())
 {
 	m_bRemoteQueueFull = false;
-	m_nUserIDHybrid = tag->ID();
+	m_nUserIDHybrid = tag->UserID();
 	m_Username = tag->ClientName();
-	m_score = tag->Score();
 	m_clientSoft = tag->ClientSoftware();
 	m_clientVersionString = GetSoftName(m_clientSoft);
 	m_clientSoftString = m_clientVersionString;
+	m_bEmuleProtocol = false;
 
 	// The functions to retrieve m_clientVerString information are
 	// currently in BaseClient.cpp, which is not linked in remote-gui app.
@@ -1128,27 +1080,21 @@ CUpDownClient::CUpDownClient(CEC_UpDownClient_Tag *tag)
 	m_fullClientVerString = m_clientSoftString + wxT(" ") + m_clientVerString;
 
 	// User hash
-	m_UserHash = tag->UserID();
+	m_UserHash = tag->UserHash();
 
 	// User IP:Port
 	m_nConnectIP = m_dwUserIP = tag->UserIP();
 	m_nUserPort = tag->UserPort();
-	m_FullUserIP = Uint32toStringIP(m_nConnectIP);
+	m_FullUserIP = m_nConnectIP;
 
 	// Server IP:Port
 	m_dwServerIP = tag->ServerIP();
 	m_nServerPort = tag->ServerPort();
 	m_ServerName = tag->ServerName();
 
-	m_waitingPosition = tag->WaitingPosition();
-	
 	m_Friend = 0;
 	if (tag->HaveFile()) {
-		CMD4Hash filehash = tag->FileID();
-		m_uploadingfile = theApp->sharedfiles->GetByID(filehash);
-		if (!m_uploadingfile) {
-			m_uploadingfile = theApp->downloadqueue->GetByID(filehash);
-		}
+		m_uploadingfile = theApp->sharedfiles->GetByID(tag->FileID());
 	} else {
 		m_uploadingfile = NULL;
 	}
@@ -1168,49 +1114,49 @@ uint16 CUpQueueRem::GetWaitingPosition(const CUpDownClient *client) const
 
 bool CUpDownClient::IsIdentified() const 
 {
-	return (credits && credits->GetCurrentIdentState(GetIP()) == IS_IDENTIFIED);
+	return m_identState == IS_IDENTIFIED;
 }
 
 
 bool CUpDownClient::IsBadGuy() const 
 {
-	return (credits && credits->GetCurrentIdentState(GetIP()) == IS_IDBADGUY);
+	return m_identState == IS_IDBADGUY;
 }
 
 
 bool CUpDownClient::SUIFailed() const 
 {
-	return (credits && credits->GetCurrentIdentState(GetIP()) == IS_IDFAILED);
+	return m_identState == IS_IDFAILED;
 }
 
 
 bool CUpDownClient::SUINeeded() const 
 {
-	return (credits && credits->GetCurrentIdentState(GetIP()) == IS_IDNEEDED);
+	return m_identState == IS_IDNEEDED;
 }
 
 
 bool CUpDownClient::SUINotSupported() const 
 {
-	return (credits && credits->GetCurrentIdentState(GetIP()) == IS_NOTAVAILABLE);
+	return m_identState == IS_NOTAVAILABLE;
 }
 
 
 uint64 CUpDownClient::GetDownloadedTotal() const 
 {
-	return credits ? credits->GetDownloadedTotal() : 0;
+	return credits->GetDownloadedTotal();
 }
 
 
 uint64 CUpDownClient::GetUploadedTotal() const 
 {
-	return credits ? credits->GetUploadedTotal() : 0;
+	return credits->GetUploadedTotal();
 }
 
 
 double CUpDownClient::GetScoreRatio() const
 {
-	return credits ? credits->GetScoreRatio(GetIP(), theApp->CryptoAvailable()) : 0;
+	return credits->GetScoreRatio(GetIP(), theApp->CryptoAvailable());
 }
 
 /* End Warning */
@@ -1218,9 +1164,7 @@ double CUpDownClient::GetScoreRatio() const
 
 CUpDownClient::~CUpDownClient()
 {
-	if (credits) {
-		delete credits;
-	}
+	delete credits;
 }
 
 
@@ -1245,7 +1189,7 @@ void CUpDownClientListRem::DeleteItem(CUpDownClient *client)
 
 uint32 CUpDownClientListRem::GetItemID(CUpDownClient *client)
 {
-	return client->GetUserIDHybrid();
+	return client->ECID();
 }
 
 
@@ -1253,29 +1197,44 @@ void CUpDownClientListRem::ProcessItemUpdate(
 	CEC_UpDownClient_Tag *tag,
 	CUpDownClient *client)
 {
-	uint16 state = tag->ClientState();
+	tag->UserID(&client->m_nUserIDHybrid);
+	tag->GetCurrentIdentState(&client->m_identState);
+	tag->HasObfuscatedConnection(&client->m_hasbeenobfuscatinglately);
+	tag->HasExtendedProtocol(&client->m_bEmuleProtocol);
+
+	tag->WaitingPosition(&client->m_waitingPosition);
+	tag->RemoteQueueRank(&client->m_nRemoteQueueRank);
+	client->m_bRemoteQueueFull = client->m_nRemoteQueueRank == 0xffff;
+	tag->AskedCount(&client->m_cAsked);
 	
-	client->m_nDownloadState = state & 0xff;
-	client->m_nUploadState = (state >> 8) & 0xff;
+	tag->ClientDownloadState(&client->m_nDownloadState);
+	tag->ClientUploadState(&client->m_nUploadState);
 	
-	client->m_nUpDatarate = tag->SpeedUp();
+	tag->SpeedUp(&client->m_nUpDatarate);
 	if ( client->m_nDownloadState == DS_DOWNLOADING ) {
-		client->kBpsDown = tag->SpeedDown() / 1024.0;
+		tag->SpeedDown(&client->kBpsDown);
 	} else {
 		client->kBpsDown = 0;
 	}
 
-	client->m_WaitTime = tag->WaitTime();
-	client->m_UpStartTimeDelay = tag->XferTime();
-	client->m_dwLastUpRequest = tag->LastReqTime();
-	client->m_WaitStartTime = tag->QueueTime();
+	tag->WaitTime(&client->m_WaitTime);
+	tag->XferTime(&client->m_UpStartTimeDelay);
+	tag->LastReqTime(&client->m_dwLastUpRequest);
+	tag->QueueTime(&client->m_WaitStartTime);
 	
 	CreditStruct *credit_struct =
 		(CreditStruct *)client->credits->GetDataStruct();
-	credit_struct->uploaded = tag->XferUp();
-	client->m_nTransferredUp = tag->XferUpSession();
+	tag->XferUp(&credit_struct->uploaded);
+	tag->XferUpSession(&client->m_nTransferredUp);
 
-	credit_struct->downloaded = tag->XferDown();
+	tag->XferDown(&credit_struct->downloaded);
+	tag->XferDownSession(&client->m_nTransferredDown);
+
+	tag->Score(&client->m_score);
+	tag->Rating(&client->m_rating);
+
+	theApp->amuledlg->m_transferwnd->clientlistctrl->UpdateClient(client,
+		theApp->amuledlg->m_transferwnd->clientlistctrl->GetListView());	// Fixme, Listview shouldn't be required as parameter
 }
 
 
@@ -1294,15 +1253,17 @@ m_up_list(conn, vtUploading), m_wait_list(conn, vtQueued)
 
 CDownQueueRem::CDownQueueRem(CRemoteConnect *conn)
 :
-CRemoteContainer<CPartFile, CMD4Hash, CEC_PartFile_Tag>(conn, true)
+CRemoteContainer<CPartFile, uint32, CEC_PartFile_Tag>(conn, true)
 {
 }
 
 
-bool CDownQueueRem::AddLink(const wxString &link, int)
+bool CDownQueueRem::AddLink(const wxString &link, uint8 cat)
 {
 	CECPacket req(EC_OP_ADD_LINK);
-	req.AddTag(CECTag(EC_TAG_STRING, link));
+	CECTag link_tag(EC_TAG_STRING, link);
+	link_tag.AddTag(CECTag(EC_TAG_PARTFILE_CAT, cat));
+	req.AddTag(link_tag);
 	
 	m_conn->SendPacket(&req);
 	return true;
@@ -1315,9 +1276,22 @@ void CDownQueueRem::StopUDPRequests()
 }
 
 
-void CDownQueueRem::ResetCatParts(int)
+void CDownQueueRem::ResetCatParts(int cat)
 {
-	// called when category being deleted. Command will be performed on remote side
+	// Called when category is deleted. Command will be performed on the remote side,
+	// but files still should be updated here right away, or drawing errors (colour not available)
+	// will happen.
+	for ( uint16 i = 0; i < GetFileCount(); i++ ) {
+		CPartFile* file = GetFileByIndex( i );
+		
+		if ( file->GetCategory() == cat ) {
+			// Reset the category
+			file->SetCategory( 0 );
+		} else if ( file->GetCategory() > cat ) {
+			// Set to the new position of the original category
+			file->SetCategory( file->GetCategory() - 1 );
+		}
+	}
 }
 
 
@@ -1336,7 +1310,7 @@ void CDownQueueRem::OnConnectionState(bool)
 CPartFile *CDownQueueRem::CreateItem(CEC_PartFile_Tag *tag)
 {
 	CPartFile *file = new CPartFile(tag);
-	m_enc_map[file->GetFileHash()] = PartFileEncoderData(file->GetPartCount(), 10);
+	m_enc_map[file->ECID()] = PartFileEncoderData();
 	ProcessItemUpdate(tag, file);
 	
 	theApp->amuledlg->m_transferwnd->downloadlistctrl->AddFile(file);
@@ -1346,17 +1320,17 @@ CPartFile *CDownQueueRem::CreateItem(CEC_PartFile_Tag *tag)
 
 void CDownQueueRem::DeleteItem(CPartFile *in_file)
 {
-	auto_ptr<CPartFile> file(in_file);
+	CScopedPtr<CPartFile> file(in_file);
 
 	theApp->amuledlg->m_transferwnd->downloadlistctrl->RemoveFile(file.get());
 	
-	m_enc_map.erase(file->GetFileHash());
+	m_enc_map.erase(file->ECID());
 }
 
 
-CMD4Hash CDownQueueRem::GetItemID(CPartFile *file)
+uint32 CDownQueueRem::GetItemID(CPartFile *file)
 {
-	return file->GetFileHash();
+	return file->ECID();
 }
 
 
@@ -1365,57 +1339,39 @@ void CDownQueueRem::ProcessItemUpdate(CEC_PartFile_Tag *tag, CPartFile *file)
 	//
 	// update status
 	//
-	if (m_inc_tags) {
-		uint32 tmpval = (uint32)(file->kBpsDown * 1024);
-		tag->SetSpeed(tmpval);
-		file->kBpsDown = tmpval / 1024.0;
-		
-		tag->SetSizeXfer(file->transferred);
-		tag->SetSizeDone(file->completedsize);
-		tag->SetSourceXferCount(file->transferingsrc);
-		tag->SetSourceNotCurrCount(file->m_notCurrentSources);
-		tag->SetSourceCount(file->m_source_count);
-		tag->SetSourceCountA4AF(file->m_a4af_source_count);
-		tag->SetFileStatus(file->status);
+	tag->Speed(&file->m_kbpsDown);
+	file->kBpsDown = file->m_kbpsDown / 1024.0;
 	
-		tag->SetLastSeenComplete(file->lastseencomplete);
-		
-		tag->SetFileCat(file->m_category);
-		
-		tag->SetPrio(file->m_iDownPriority);
+	tag->SizeXfer(&file->transferred);
+	tag->SizeDone(&file->completedsize);
+	tag->SourceXferCount(&file->transferingsrc);
+	tag->SourceNotCurrCount(&file->m_notCurrentSources);
+	tag->SourceCount(&file->m_source_count);
+	tag->SourceCountA4AF(&file->m_a4af_source_count);
+	tag->FileStatus(&file->status);
+	tag->Stopped(&file->m_stopped);
+
+	tag->LastSeenComplete(&file->lastseencomplete);
+	tag->LastDateChanged(&file->m_lastDateChanged);
+	tag->DownloadActiveTime(&file->m_nDlActiveTime);
+	tag->AvailablePartCount(&file->m_availablePartsCount);
+
+	tag->GetLostDueToCorruption(&file->m_iLostDueToCorruption);
+	tag->GetGainDueToCompression(&file->m_iGainDueToCompression);
+	tag->TotalPacketsSavedDueToICH(&file->m_iTotalPacketsSavedDueToICH);
+
+	tag->FileCat(&file->m_category);
+	
+	tag->Prio(&file->m_iDownPriorityEC);
+	if ( file->m_iDownPriorityEC >= 10 ) {
+		file->m_iDownPriority = file->m_iDownPriorityEC - 10;
+		file->m_bAutoDownPriority = true;
 	} else {
-		file->kBpsDown = tag->Speed() / 1024.0;
-	
-		if ( file->kBpsDown > 0 ) {
-			file->transferred = tag->SizeXfer();
-			file->SetCompletedSize(tag->SizeDone());
-		}
-	
-		file->transferingsrc = tag->SourceXferCount();
-		file->m_notCurrentSources = tag->SourceNotCurrCount();
-		file->m_source_count = tag->SourceCount();
-		file->m_a4af_source_count = tag->SourceCountA4AF();
-		file->status = tag->FileStatus();
-	
-		file->lastseencomplete = tag->LastSeenComplete();
-		
-		file->m_category = tag->FileCat();
-		
-		file->m_iDownPriority = tag->Prio();
-		if ( file->m_iDownPriority >= 10 ) {
-			file->m_iDownPriority-= 10;
-			file->m_bAutoDownPriority = true;
-		} else {
-			file->m_bAutoDownPriority = false;
-		}
+		file->m_iDownPriority = file->m_iDownPriorityEC;
+		file->m_bAutoDownPriority = false;
 	}
+
 	file->percentcompleted = (100.0*file->GetCompletedSize()) / file->GetFileSize();
-	if ( file->m_iDownPriority >= 10 ) {
-		file->m_iDownPriority -= 10;
-		file->m_bAutoUpPriority = true;
-	} else {
-		file->m_bAutoUpPriority = false;
-	}
 
 	//
 	// Copy part/gap status
@@ -1423,67 +1379,64 @@ void CDownQueueRem::ProcessItemUpdate(CEC_PartFile_Tag *tag, CPartFile *file)
 	CECTag *gaptag = tag->GetTagByName(EC_TAG_PARTFILE_GAP_STATUS);
 	CECTag *parttag = tag->GetTagByName(EC_TAG_PARTFILE_PART_STATUS);
 	CECTag *reqtag = tag->GetTagByName(EC_TAG_PARTFILE_REQ_STATUS);
-	if (gaptag && parttag && reqtag) {
-		wxASSERT(m_enc_map.count(file->GetFileHash()));
+	if (gaptag || parttag || reqtag) {
+		wxASSERT(m_enc_map.count(file->ECID()));
 		
-		PartFileEncoderData &encoder = m_enc_map[file->GetFileHash()];
-		encoder.Decode(
-			(unsigned char *)gaptag->GetTagData(), gaptag->GetTagDataLen(),
-			(unsigned char *)parttag->GetTagData(), parttag->GetTagDataLen());
-			
-		const Gap_Struct *reqparts = (const Gap_Struct *)reqtag->GetTagData();
-		unsigned reqcount = reqtag->GetTagDataLen() / sizeof(Gap_Struct);
-		
-		// adjust size of gaplist to reqcount
-		unsigned gap_size = encoder.m_gap_status.Size() / (2 * sizeof(uint64));
-		while ( file->m_gaplist.size() > gap_size ) {
-			file->m_gaplist.pop_front();
-		}
-		while ( file->m_gaplist.size() != gap_size ) {
-			file->m_gaplist.push_front(new Gap_Struct);
-		}
-		const uint64 *gap_info = (const uint64 *)encoder.m_gap_status.Buffer();
-		
-		
-		std::list<Gap_Struct*>::iterator it = file->m_gaplist.begin();
-		for (unsigned j = 0; j < gap_size;j++) {
-			Gap_Struct* gap = *it++;
-			gap->start = ENDIAN_NTOHLL(gap_info[2*j]);
-			gap->end = ENDIAN_NTOHLL(gap_info[2*j+1]);
-		}
-		
-		// adjust size of requested block list
-		while ( file->m_requestedblocks_list.size() > reqcount ) {
-			file->m_requestedblocks_list.pop_front();
-		}
-		while ( file->m_requestedblocks_list.size() != reqcount ) {
-			file->m_requestedblocks_list.push_front(new Requested_Block_Struct);
-		}
+		PartFileEncoderData &encoder = m_enc_map[file->ECID()];
 
-		std::list<Requested_Block_Struct*>::iterator it2 = file->m_requestedblocks_list.begin();
-		for (unsigned i = 0; i < reqcount; ++i) {
-			Requested_Block_Struct* block = *it2++;
-			block->StartOffset = ENDIAN_NTOHLL(reqparts[i].start);
-			block->EndOffset = ENDIAN_NTOHLL(reqparts[i].end);
+		if (gaptag) {
+			ArrayOfUInts64 gaps;
+			encoder.DecodeGaps(gaptag, gaps);
+			int gap_size = gaps.size() / 2;
+			// clear gaplist
+			file->m_gaplist.Init(file->GetFileSize(), false);
+
+			// and refill it
+			for (int j = 0; j < gap_size; j++) {
+				file->m_gaplist.AddGap(gaps[2*j], gaps[2*j+1]);
+			}
 		}
-		// copy parts frequency
-		const unsigned char *part_info = encoder.m_part_status.Buffer();
-		for(int i = 0; i < file->GetPartCount(); ++i) {
-			file->m_SrcpartFrequency[i] = part_info[i];
+		if (parttag) {
+			encoder.DecodeParts(parttag, file->m_SrcpartFrequency);
+			// sanity check
+			wxASSERT (file->m_SrcpartFrequency.size() == file->GetPartCount());
 		}
-	} else {
-		printf("ERROR: %p %p %p\n", (void*)gaptag, (void*)parttag, (void*)reqtag);
+		if (reqtag) {
+			ArrayOfUInts64 reqs;
+			encoder.DecodeReqs(reqtag, reqs);
+			int req_size = reqs.size() / 2;
+			// clear reqlist
+			DeleteContents(file->m_requestedblocks_list);
+
+			// and refill it
+			for (int j = 0; j < req_size; j++) {
+				Requested_Block_Struct* block = new Requested_Block_Struct;
+				block->StartOffset = reqs[2*j];
+				block->EndOffset   = reqs[2*j+1];
+				file->m_requestedblocks_list.push_back(block);
+			}
+		}
 	}
 	
-	// Get source names
+	// Get source names and counts
 	CECTag *srcnametag = tag->GetTagByName(EC_TAG_PARTFILE_SOURCE_NAMES);
 	if (srcnametag) {
-		file->ClearSourcenameItemList();
-		int max = srcnametag->GetTagCount();
-		for (int i = 0; i < max - 1; ) {
-			wxString name = srcnametag->GetTagByIndex(i++)->GetStringData();
-			long count = srcnametag->GetTagByIndex(i++)->GetInt();
-			file->AddSourcenameItemList(name, count);
+		SourcenameItemMap &map = file->GetSourcenameItemMap();
+		size_t max = srcnametag->GetTagCount();
+		for (size_t i = 0; i < max; i++) {
+			CECTag *ntag = srcnametag->GetTagByIndex(i);
+			uint32 key = ntag->GetInt();
+			int count = ntag->GetTagByNameSafe(EC_TAG_PARTFILE_SOURCE_NAMES_COUNTS)->GetInt();
+			if (count == 0) {
+				map.erase(key);
+			} else {
+				SourcenameItem &item = map[key];
+				item.count = count;
+				CECTag *nametag = ntag->GetTagByName(EC_TAG_PARTFILE_SOURCE_NAMES);
+				if (nametag) {
+					item.name = nametag->GetStringData();
+				}
+			}
 		}
 	}
 	
@@ -1580,11 +1533,11 @@ CClientListRem::CClientListRem(CRemoteConnect *conn)
 void CClientListRem::FilterQueues()
 {
 	// FIXME: add code
-	//wxASSERT(0);
+	//wxFAIL;
 }
 
 
-CSearchListRem::CSearchListRem(CRemoteConnect *conn) : CRemoteContainer<CSearchFile, CMD4Hash, CEC_SearchFile_Tag>(conn)
+CSearchListRem::CSearchListRem(CRemoteConnect *conn) : CRemoteContainer<CSearchFile, CMD4Hash, CEC_SearchFile_Tag>(conn, true)
 {
 	m_curr_search = -1;
 }
@@ -1624,6 +1577,12 @@ void CSearchListRem::StopGlobalSearch()
 }
 
 
+void CSearchListRem::StopKadSearch()
+{
+// FIXME implementation needed
+}
+
+
 void CSearchListRem::HandlePacket(const CECPacket *packet)
 {
 	if ( packet->GetOpCode() == EC_OP_SEARCH_PROGRESS ) {
@@ -1641,6 +1600,7 @@ m_showChildren(false),
 m_sourceCount(0),
 m_completeSourceCount(0),
 m_kademlia(false),
+m_downloadStatus(NEW),
 m_clientID(0),
 m_clientPort(0)
 {
@@ -1684,8 +1644,20 @@ CMD4Hash CSearchListRem::GetItemID(CSearchFile *file)
 
 void CSearchListRem::ProcessItemUpdate(CEC_SearchFile_Tag *tag, CSearchFile *file)
 {
-	file->m_sourceCount = tag->SourceCount();
-	file->m_completeSourceCount = tag->CompleteSourceCount();
+	uint32 sourceCount = file->m_sourceCount;
+	uint32 completeSourceCount = file->m_completeSourceCount;
+	CSearchFile::DownloadStatus status = file->m_downloadStatus;
+	tag->SourceCount(&file->m_sourceCount);
+	tag->CompleteSourceCount(&file->m_completeSourceCount);
+	tag->DownloadStatus((uint32 *) &file->m_downloadStatus);
+
+	if (file->m_sourceCount != sourceCount
+			|| file->m_completeSourceCount != completeSourceCount
+			|| file->m_downloadStatus != status) {
+		if (theApp->amuledlg && theApp->amuledlg->m_searchwnd) {
+			theApp->amuledlg->m_searchwnd->UpdateResult(file);
+		}
+	}
 }
 
 
@@ -1744,35 +1716,34 @@ bool CUpDownClient::IsBanned() const
 void  CUpDownClient::Ban()
 {
 	// FIXME: add code
-	wxASSERT(0);
+	wxFAIL;
 }
 
 
 void  CUpDownClient::UnBan()
 {
 	// FIXME: add code
-	wxASSERT(0);
+	wxFAIL;
 }
 
 
 void CUpDownClient::RequestSharedFileList()
 {
 	// FIXME: add code
-	wxASSERT(0);
+	wxFAIL;
 }
 
 
 void CKnownFile::SetFileComment(const wxString &)
 {
 	// FIXME: add code
-	wxASSERT(0);
+	wxMessageBox(_("Comments and ratings are not supported on remote gui yet"), _("Information"), wxOK | wxICON_INFORMATION);
 }
 
 
 void CKnownFile::SetFileRating(unsigned char)
 {
 	// FIXME: add code
-	wxASSERT(0);
 }
 
 
@@ -1790,7 +1761,7 @@ bool CUpDownClient::SwapToAnotherFile(
 	CPartFile* WXUNUSED(toFile))
 {
 	// FIXME: add code
-	wxASSERT(0);
+	wxFAIL;
 	return false;
 }
 
@@ -1801,40 +1772,34 @@ bool CUpDownClient::SwapToAnotherFile(
 //
 CPacket* CKnownFile::CreateSrcInfoPacket(const CUpDownClient *, uint8 /*byRequestedVersion*/, uint16 /*nRequestedOptions*/)
 {
-	wxASSERT(0);
+	wxFAIL;
 	return 0;
 }
 
 
 bool CKnownFile::LoadFromFile(const class CFileDataIO*)
 {
-	wxASSERT(0);
+	wxFAIL;
 	return false;
 }
 
 
 void CKnownFile::UpdatePartsInfo()
 {
-	wxASSERT(0);
-}
-
-
-void CKnownFile::SetFileSize(uint64 nFileSize)
-{
-	CAbstractFile::SetFileSize(nFileSize);
+	wxFAIL;
 }
 
 
 CPacket* CPartFile::CreateSrcInfoPacket(CUpDownClient const *, uint8 /*byRequestedVersion*/, uint16 /*nRequestedOptions*/)
 {
-	wxASSERT(0);
+	wxFAIL;
 	return 0;
 }
 
 
 void CPartFile::UpdatePartsInfo()
 {
-	wxASSERT(0);
+	wxFAIL;
 }
 
 
@@ -1876,10 +1841,11 @@ void CPartFile::UpdateFileRatingCommentAvail()
 
 bool CPartFile::SavePartFile(bool)
 {
-	wxASSERT(0);
+	wxFAIL;
 	return false;
 }
 
+CamuleRemoteGuiApp *theApp;
 
 //
 // since gui is not linked with amule.cpp - define events here

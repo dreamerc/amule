@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -99,12 +99,7 @@ CClientList::CClientList()
 
 CClientList::~CClientList()
 {
-	std::map<uint32, CDeletedClient*>::iterator it = m_trackedClientsList.begin();
-	for ( ; it != m_trackedClientsList.end(); ++it ){
-		delete it->second;
-	}
-
-	m_trackedClientsList.clear();
+	DeleteContents(m_trackedClientsList);
 
 	wxASSERT(m_clientList.empty());
 	wxASSERT(m_delete_queue.empty());
@@ -451,6 +446,15 @@ CUpDownClient* CClientList::FindClientByIP( uint32 clientip, uint16 port )
 	}
 
 	return NULL;
+}
+
+
+CUpDownClient* CClientList::FindClientByIP( uint32 clientip )
+{
+	// Find all items with the specified ip
+	std::pair<IDMap::iterator, IDMap::iterator> range = m_ipList.equal_range( clientip );
+
+	return (range.first != range.second) ? range.first->second : NULL;
 }
 
 
@@ -839,7 +843,7 @@ bool CClientList::IsDeadSource(const CUpDownClient* client)
 	return m_deadSources.IsDeadSource( client );
 }
 
-bool CClientList::SendMessage(uint64 client_id, const wxString& message)
+bool CClientList::SendChatMessage(uint64 client_id, const wxString& message)
 {
 	CUpDownClient* client = FindClientByIP(IP_FROM_GUI_ID(client_id), PORT_FROM_GUI_ID(client_id));
 	AddDebugLogLineM( false, logClient, wxT("Trying to Send Message.") );
@@ -847,14 +851,14 @@ bool CClientList::SendMessage(uint64 client_id, const wxString& message)
 		AddDebugLogLineM( false, logClient, wxT("Sending.") );
 	} else {
 		AddDebugLogLineM( true, logClient, 
-			CFormat( wxT("No client (GUI_ID %lli [%s:%llu]) found in CClientList::SendMessage(). Creating") ) 
+			CFormat( wxT("No client (GUI_ID %lli [%s:%llu]) found in CClientList::SendChatMessage(). Creating") ) 
 				% client_id 
 				% Uint32toStringIP(IP_FROM_GUI_ID(client_id))
 				% PORT_FROM_GUI_ID(client_id) );
 		client = new CUpDownClient(PORT_FROM_GUI_ID(client_id),IP_FROM_GUI_ID(client_id),0,0,NULL, true, true);
 		AddClient(client);
 	}
-	return client->SendMessage(message);
+	return client->SendChatMessage(message);
 }
 
 void CClientList::SetChatState(uint64 client_id, uint8 state) {
@@ -1019,7 +1023,7 @@ void CClientList::CleanUpClientList()
 			// Don't delete sources coming from source seeds for 10 mins,
 			// to give them a chance to connect and become a useful source.
 			if (pCurClient->GetSourceFrom() == SF_SOURCE_SEEDS && cur_tick - (uint32)theStats::GetStartTime() < MIN2MS(10)) continue;
-			if ((pCurClient->GetUploadState() == US_NONE || pCurClient->GetUploadState() == US_BANNED && !pCurClient->IsBanned())
+			if ((pCurClient->GetUploadState() == US_NONE || (pCurClient->GetUploadState() == US_BANNED && !pCurClient->IsBanned()))
 				&& pCurClient->GetDownloadState() == DS_NONE
 				&& pCurClient->GetChatState() == MS_NONE
 				&& pCurClient->GetKadState() == KS_NONE
@@ -1029,7 +1033,7 @@ void CClientList::CleanUpClientList()
 				pCurClient->Disconnected(wxT("Removed during ClientList cleanup."));
 				pCurClient->Safe_Delete(); 
 			} else {
-				if (!(pCurClient->GetUploadState() == US_NONE || pCurClient->GetUploadState() == US_BANNED && !pCurClient->IsBanned())) {
+				if (!(pCurClient->GetUploadState() == US_NONE || (pCurClient->GetUploadState() == US_BANNED && !pCurClient->IsBanned()))) {
 					AddDebugLogLineM(false, logProxy,
 						CFormat(wxT("Debug: Not deleted client %x with up state: %i "))
 							% (long int)pCurClient % pCurClient->GetUploadState());
@@ -1090,6 +1094,9 @@ bool CClientList::IsKadFirewallCheckIP(uint32 ip) const
 void CClientList::AddDirectCallbackClient(CUpDownClient* toAdd)
 {
 	wxASSERT(toAdd->GetDirectCallbackTimeout() != 0);
+	if (toAdd->HasBeenDeleted()) {
+		return;
+	}
 	for (DirectCallbackList::const_iterator it = m_currentDirectCallbacks.begin(); it != m_currentDirectCallbacks.end(); ++it) {
 		if (*it == toAdd) {
 			wxFAIL; // might happen very rarely on multiple connection tries, could be fixed in the client class, till then it's not much of a problem though

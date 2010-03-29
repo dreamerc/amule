@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -23,18 +23,30 @@
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301, USA
 //
 
+#include <common/MenuIDs.h>  // IDs for the chat-popup menu
+
 #include <wx/app.h>
 
 #include "ChatWnd.h"		// Interface declarations
 
 #include "amule.h"		// Needed for theApp
 #include "amuleDlg.h"		// Needed for CamuleDlg
+#include "ClientList.h"		// Needed for CClientList
+#include "updownclient.h"	// Needed for CUpDownClient
 #include "FriendListCtrl.h"	// Needed for CFriendListCtrl
+#include "Friend.h"			// Needed for CFriend
 #include "ChatSelector.h"	// Needed for CChatSelector
 #include "muuli_wdr.h"		// Needed for messagePage
 #include "OtherFunctions.h"
 
 BEGIN_EVENT_TABLE(CChatWnd, wxPanel)
+	EVT_RIGHT_DOWN(CChatWnd::OnNMRclickChatTab)
+
+	EVT_MENU(MP_CLOSE_TAB,			CChatWnd::OnPopupClose)
+	EVT_MENU(MP_CLOSE_ALL_TABS,		CChatWnd::OnPopupCloseAll)
+	EVT_MENU(MP_CLOSE_OTHER_TABS,	CChatWnd::OnPopupCloseOthers)
+	EVT_MENU(MP_ADDFRIEND,			CChatWnd::OnAddFriend )
+
 	EVT_TEXT_ENTER(IDC_CMESSAGE, CChatWnd::OnBnClickedCsend)
 	EVT_BUTTON(IDC_CSEND, CChatWnd::OnBnClickedCsend)
 	EVT_BUTTON(IDC_CCLOSE, CChatWnd::OnBnClickedCclose)
@@ -49,6 +61,10 @@ CChatWnd::CChatWnd(wxWindow* pParent)
 	content->Show(this, true);
 
 	chatselector = CastChild( IDC_CHATSELECTOR, CChatSelector );
+	// We want to use our own popup menu
+	chatselector->SetPopupHandler(this);
+	m_menu = NULL;
+
 	friendlistctrl = CastChild( ID_FRIENDLIST, CFriendListCtrl );
 }
 
@@ -64,6 +80,77 @@ void CChatWnd::StartSession(CDlgFriend* friend_client, bool setfocus)
 
 	// Check to enable the window controls if needed
 	CheckNewButtonsState();	
+}
+
+
+void CChatWnd::OnNMRclickChatTab(wxMouseEvent& evt)
+{
+	// Only handle events from the chat-notebook
+	if (evt.GetEventObject() != (wxObject*)chatselector)
+		return;
+	
+	if (chatselector->GetSelection() == -1) {
+		return;
+	}
+	
+	// Avoid opening another menu when it's already open
+	if (m_menu == NULL) {  
+		m_menu = new wxMenu(_("Chat"));
+		
+		m_menu->Append(MP_CLOSE_TAB, wxString(_("Close tab")));
+		m_menu->Append(MP_CLOSE_ALL_TABS, wxString(_("Close all tabs")));
+		m_menu->Append(MP_CLOSE_OTHER_TABS, wxString(_("Close other tabs")));
+		
+		m_menu->AppendSeparator();
+		
+		wxMenuItem * addFriend = m_menu->Append(MP_ADDFRIEND, _("Add to Friends"));
+
+		// Disable this client if it is already a friend
+		CUpDownClient* client = chatselector->GetCurrentClient();
+		if (client && client->IsFriend()) {
+			addFriend->Enable(false);
+		}
+
+		PopupMenu(m_menu, evt.GetPosition());
+		
+		delete m_menu;
+		m_menu = NULL;
+	}
+}
+
+
+void CChatWnd::OnPopupClose(wxCommandEvent& WXUNUSED(evt))
+{
+	chatselector->DeletePage(chatselector->GetSelection());
+}
+
+
+void CChatWnd::OnPopupCloseAll(wxCommandEvent& WXUNUSED(evt))
+{
+	chatselector->DeleteAllPages();
+}
+
+
+void CChatWnd::OnPopupCloseOthers(wxCommandEvent& WXUNUSED(evt))
+{
+	wxNotebookPage* current = chatselector->GetPage(chatselector->GetSelection());
+	
+	for (int i = chatselector->GetPageCount() - 1; i >= 0; i--) {
+		if (current != chatselector->GetPage(i))
+			chatselector->DeletePage( i );
+	}
+}
+
+
+void CChatWnd::OnAddFriend(wxCommandEvent& WXUNUSED(evt))
+{
+	// Get the client that the session is open to
+	CUpDownClient* client = chatselector->GetCurrentClient();
+	
+	// Add the client as friend unless it's already a friend
+	if (client && !client->IsFriend()) {
+		AddFriend(client);
+	}
 }
 
 
@@ -111,18 +198,22 @@ void CChatWnd::RemoveFriend(const CMD4Hash& userhash, uint32 lastUsedIP, uint32 
 	friendlistctrl->RemoveFriend(friendlistctrl->FindFriend(userhash, lastUsedIP, lastUsedPort));
 }
 
-void CChatWnd::RefreshFriend(const CMD4Hash& userhash, const wxString& name, uint32 lastUsedIP, uint32 lastUsedPort)
+void CChatWnd::RefreshFriend(CFriend* Friend, bool connected)
 {
-	CDlgFriend* toupdate = friendlistctrl->FindFriend(userhash, lastUsedIP, lastUsedPort);
+	CDlgFriend* toupdate = friendlistctrl->FindFriend(Friend->GetUserHash(), Friend->GetIP(), Friend->GetPort());
 	if (toupdate) {
-		if (!name.IsEmpty()) {
-			toupdate->m_name = name;	
-		} 
-		
-		// If name is empty, this is a disconnection/deletion event
-		toupdate->islinked = !name.IsEmpty();
+		toupdate->m_name = Friend->GetName();	
+		toupdate->islinked = connected;
+		if (toupdate->m_ip == Friend->GetIP() && toupdate->m_port == Friend->GetPort()) {
+			chatselector->RefreshFriend(GUI_ID(toupdate->m_ip, toupdate->m_port), toupdate->m_name);
+		} else {
+			// Friend changed IP - drop Chat session
+			chatselector->EndSession(GUI_ID(toupdate->m_ip, toupdate->m_port));
+			// and update IP
+			toupdate->m_ip = Friend->GetIP();
+			toupdate->m_port = Friend->GetPort();
+		}
 		friendlistctrl->RefreshFriend(toupdate);
-		chatselector->RefreshFriend(GUI_ID(toupdate->m_ip, toupdate->m_port), toupdate->m_name);
 	}
 }
 
@@ -155,7 +246,8 @@ void CChatWnd::SendMessage(const wxString& message, const wxString& client_name,
 }
 
 
-void CChatWnd::CheckNewButtonsState() {
+void CChatWnd::CheckNewButtonsState()
+{
 	switch (chatselector->GetPageCount()) {
 			case 0:
 				GetParent()->FindWindow(IDC_CSEND)->Enable(false);
@@ -175,4 +267,22 @@ void CChatWnd::CheckNewButtonsState() {
 				break;
 	}
 }
+
+
+bool CChatWnd::IsIdValid(uint64 id)
+{ 
+	return chatselector->GetTabByClientID(id) >= 0;
+}
+
+
+void CChatWnd::ShowCaptchaResult(uint64 id, bool ok)
+{
+	chatselector->ShowCaptchaResult(id, ok);
+}
+
+void CChatWnd::EndSession(uint64 id)
+{
+	chatselector->EndSession(id);
+}
+
 // File_checked_for_headers

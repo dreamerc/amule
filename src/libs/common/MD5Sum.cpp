@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -104,7 +104,7 @@ static void MD5Transform (uint32_t [4], const unsigned char [64]);
 static void Encode (unsigned char *, uint32_t *, size_t);
 static void Decode (uint32_t *, const unsigned char *, size_t);
 
-static unsigned char PADDING[64] = {
+static const unsigned char PADDING[64] = {
   0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0

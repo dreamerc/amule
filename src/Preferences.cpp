@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -54,10 +54,11 @@
 #include <wx/valgen.h>
 #include "muuli_wdr.h"
 #include "StatisticsDlg.h"
+#include "MuleColour.h"
 #endif
 
-#include "RandomFunctions.h"
 #ifndef CLIENT_GUI
+#include "RandomFunctions.h"
 #include "PlatformSpecific.h"		// Needed for PlatformSpecific::GetMaxConnections()
 #endif
 
@@ -65,8 +66,8 @@
 #define DEFAULT_UDP_PORT 4672
 
 // Static variables
-COLORREF		CPreferences::s_colors[cntStatColors];
-COLORREF		CPreferences::s_colors_ref[cntStatColors];
+unsigned long		CPreferences::s_colors[cntStatColors];
+unsigned long		CPreferences::s_colors_ref[cntStatColors];
 
 CPreferences::CFGMap	CPreferences::s_CfgList;
 CPreferences::CFGList	CPreferences::s_MiscList;
@@ -83,7 +84,7 @@ uint16		CPreferences::s_slotallocation;
 wxString	CPreferences::s_Addr;
 uint16		CPreferences::s_port;
 uint16		CPreferences::s_udpport;
-bool		CPreferences::s_UDPDisable;
+bool		CPreferences::s_UDPEnable;
 uint16		CPreferences::s_maxconnections;
 bool		CPreferences::s_reconnect;
 bool		CPreferences::s_autoconnect;
@@ -142,7 +143,7 @@ bool		CPreferences::s_bstartnextfilesame;
 bool		CPreferences::s_bshowoverhead;
 bool		CPreferences::s_bDAP;
 bool		CPreferences::s_bUAP;
-bool		CPreferences::s_ShowRatesOnTitle;
+uint8_t		CPreferences::s_showRatesOnTitle;
 wxString	CPreferences::s_VideoPlayer;
 bool		CPreferences::s_moviePreviewBackup;
 bool		CPreferences::s_showAllNotCats;
@@ -152,6 +153,7 @@ uint8		CPreferences::s_filterlevel;
 uint8		CPreferences::s_iFileBufferSize;
 uint8		CPreferences::s_iQueueSize;
 wxString 	CPreferences::s_datetimeformat;
+wxString	CPreferences::s_sWebPath;
 wxString	CPreferences::s_sWebPassword;
 wxString	CPreferences::s_sWebLowPassword;
 uint16		CPreferences::s_nWebPort;
@@ -180,15 +182,12 @@ bool		CPreferences::s_Percent;
 bool		CPreferences::s_SecIdent;
 bool		CPreferences::s_ExtractMetaData;
 bool		CPreferences::s_allocFullFile;
-uint16		CPreferences::s_Browser;
 wxString	CPreferences::s_CustomBrowser;
 bool		CPreferences::s_BrowserTab;
 CPath		CPreferences::s_OSDirectory;
 wxString	CPreferences::s_Skin;
-bool		CPreferences::s_UseSkinFiles;
 bool		CPreferences::s_FastED2KLinksHandler;
 bool		CPreferences::s_ToolbarOrientation;
-bool		CPreferences::s_ShowPartFileNumber;
 bool		CPreferences::s_AICHTrustEveryHash;
 wxString 	CPreferences::s_CommentFilterString;
 bool		CPreferences::s_IPFilterAutoLoad;
@@ -199,6 +198,9 @@ wxString 	CPreferences::s_MessageFilterString;
 bool		CPreferences::s_FilterAllMessages;
 bool 		CPreferences::s_FilterComments;
 bool		CPreferences::s_FilterSomeMessages;
+bool		CPreferences::s_ShowMessagesInLog;
+bool		CPreferences::s_IsAdvancedSpamfilterEnabled;
+bool		CPreferences::s_IsChatCaptchaEnabled;
 bool		CPreferences::s_ShareHiddenFiles;
 bool		CPreferences::s_AutoSortDownload;
 bool		CPreferences::s_NewVersionCheck;
@@ -209,11 +211,13 @@ bool		CPreferences::s_DropSlowSources;
 bool		CPreferences::s_IsClientCryptLayerSupported;
 bool		CPreferences::s_bCryptLayerRequested;
 bool		CPreferences::s_IsClientCryptLayerRequired;
-uint32	CPreferences::s_dwKadUDPKey;
-uint8	CPreferences::s_byCryptTCPPaddingLength;
+uint32		CPreferences::s_dwKadUDPKey;
+uint8		CPreferences::s_byCryptTCPPaddingLength;
 
-wxString CPreferences::s_Ed2kURL;
-wxString CPreferences::s_KadURL;
+wxString 	CPreferences::s_Ed2kURL;
+wxString 	CPreferences::s_KadURL;
+bool	 	CPreferences::s_GeoIPEnabled;
+wxString 	CPreferences::s_GeoIPUpdateUrl;
 
 
 /**
@@ -507,7 +511,7 @@ public:
 				int id = m_widget->GetId();
 				int pos = slider->GetValue();
 				wxScrollEvent evt( wxEVT_SCROLL_THUMBRELEASE, id, pos );
-				m_widget->ProcessEvent( evt );
+				m_widget->GetEventHandler()->ProcessEvent( evt );
 			}
 
 			return true;
@@ -568,7 +572,7 @@ public:
 
 
 /**
- * Cfg-class for uint64s, with no assisiated widgets.
+ * Cfg-class for uint64s, with no associated widgets.
  */
 class Cfg_Counter : public Cfg_Base
 {
@@ -611,6 +615,33 @@ protected:
 
 #ifndef AMULE_DAEMON
 
+class Cfg_Colour : public Cfg_Base
+{
+      public:
+	Cfg_Colour(const wxString& key, wxColour& colour)
+		: Cfg_Base(key),
+		  m_colour(colour),
+		  m_default(CMuleColour(colour).GetULong())
+	{}
+
+	virtual void LoadFromFile(wxConfigBase* cfg)
+	{
+		long int rgb;
+		cfg->Read(GetKey(), &rgb, m_default);
+		m_colour.Set(rgb);
+	}
+
+	virtual void SaveToFile(wxConfigBase* cfg)
+	{
+		cfg->Write(GetKey(), static_cast<long int>(CMuleColour(m_colour).GetULong()));
+	}
+
+      private:
+	wxColour&	m_colour;
+	long int	m_default;
+};
+
+
 typedef struct {
 	int	 id;
 	bool	 available;
@@ -626,42 +657,42 @@ typedef struct {
  */
 static LangInfo aMuleLanguages[] = {
 	{ wxLANGUAGE_DEFAULT,				true,	wxEmptyString,	wxTRANSLATE("System default") },
-	{ wxLANGUAGE_ALBANIAN,				true,	wxEmptyString,	wxTRANSLATE("Albanian") },
-	{ wxLANGUAGE_ARABIC,				true,	wxEmptyString,	wxTRANSLATE("Arabic") },
-	{ wxLANGUAGE_ASTURIAN,				true,	wxEmptyString,	wxTRANSLATE("Asturian") },
-	{ wxLANGUAGE_BASQUE,				true,	wxEmptyString,	wxTRANSLATE("Basque") },
-	{ wxLANGUAGE_BULGARIAN,				true,	wxEmptyString,	wxTRANSLATE("Bulgarian") },
-	{ wxLANGUAGE_CATALAN,				true,	wxEmptyString,	wxTRANSLATE("Catalan") },
-	{ wxLANGUAGE_CHINESE_SIMPLIFIED,		true,	wxEmptyString,	wxTRANSLATE("Chinese (Simplified)") },
-	{ wxLANGUAGE_CHINESE_TRADITIONAL,		true,	wxEmptyString,	wxTRANSLATE("Chinese (Traditional)") },
-	{ wxLANGUAGE_CROATIAN,				true,	wxEmptyString,	wxTRANSLATE("Croatian") },
-	{ wxLANGUAGE_CZECH,				true,	wxEmptyString,	wxTRANSLATE("Czech") },
-	{ wxLANGUAGE_DANISH,				true,	wxEmptyString,	wxTRANSLATE("Danish") },
-	{ wxLANGUAGE_DUTCH,				true,	wxEmptyString,	wxTRANSLATE("Dutch") },
-	{ wxLANGUAGE_ENGLISH_UK,			true,	wxEmptyString,	wxTRANSLATE("English (U.K.)") },
-	{ wxLANGUAGE_ESTONIAN,				true,	wxEmptyString,	wxTRANSLATE("Estonian") },
-	{ wxLANGUAGE_FINNISH,				true,	wxEmptyString,	wxTRANSLATE("Finnish") },
-	{ wxLANGUAGE_FRENCH,				true,	wxEmptyString,	wxTRANSLATE("French") },
-	{ wxLANGUAGE_GALICIAN,				true,	wxEmptyString,	wxTRANSLATE("Galician") },
-	{ wxLANGUAGE_GERMAN,				true,	wxEmptyString,	wxTRANSLATE("German") },
-	{ wxLANGUAGE_GREEK,				true,	wxEmptyString,	wxTRANSLATE("Greek") },
-	{ wxLANGUAGE_HEBREW,				true,	wxEmptyString,	wxTRANSLATE("Hebrew") },
-	{ wxLANGUAGE_HUNGARIAN,				true,	wxEmptyString,	wxTRANSLATE("Hungarian") },
-	{ wxLANGUAGE_ITALIAN,				true,	wxEmptyString,	wxTRANSLATE("Italian") },
-	{ wxLANGUAGE_ITALIAN_SWISS,			true,	wxEmptyString,	wxTRANSLATE("Italian (Swiss)") },
-	{ wxLANGUAGE_JAPANESE,				true,	wxEmptyString,	wxTRANSLATE("Japanese") },
-	{ wxLANGUAGE_KOREAN,				true,	wxEmptyString,	wxTRANSLATE("Korean") },
-	{ wxLANGUAGE_LITHUANIAN,			true,	wxEmptyString,	wxTRANSLATE("Lithuanian") },
-	{ wxLANGUAGE_NORWEGIAN_NYNORSK,			true,	wxEmptyString,	wxTRANSLATE("Norwegian (Nynorsk)") },
-	{ wxLANGUAGE_POLISH,				true,	wxEmptyString,	wxTRANSLATE("Polish") },
-	{ wxLANGUAGE_PORTUGUESE,			true,	wxEmptyString,	wxTRANSLATE("Portuguese") },
-	{ wxLANGUAGE_PORTUGUESE_BRAZILIAN,		true,	wxEmptyString,	wxTRANSLATE("Portuguese (Brazilian)") },
-	{ wxLANGUAGE_RUSSIAN,				true,	wxEmptyString,	wxTRANSLATE("Russian") },
-	{ wxLANGUAGE_SLOVENIAN,				true,	wxEmptyString,	wxTRANSLATE("Slovenian") },
-	{ wxLANGUAGE_SPANISH,				true,	wxEmptyString,	wxTRANSLATE("Spanish") },
-	{ wxLANGUAGE_SWEDISH,				true,	wxEmptyString,	wxTRANSLATE("Swedish") },
-	{ wxLANGUAGE_TURKISH,				true,	wxEmptyString,	wxTRANSLATE("Turkish") },
-	{ wxLANGUAGE_UKRAINIAN,				true,	wxEmptyString,	wxTRANSLATE("Ukrainian") },
+	{ wxLANGUAGE_ALBANIAN,				false,	wxEmptyString,	wxTRANSLATE("Albanian") },
+	{ wxLANGUAGE_ARABIC,				false,	wxEmptyString,	wxTRANSLATE("Arabic") },
+	{ wxLANGUAGE_ASTURIAN,				false,	wxEmptyString,	wxTRANSLATE("Asturian") },
+	{ wxLANGUAGE_BASQUE,				false,	wxEmptyString,	wxTRANSLATE("Basque") },
+	{ wxLANGUAGE_BULGARIAN,				false,	wxEmptyString,	wxTRANSLATE("Bulgarian") },
+	{ wxLANGUAGE_CATALAN,				false,	wxEmptyString,	wxTRANSLATE("Catalan") },
+	{ wxLANGUAGE_CHINESE_SIMPLIFIED,	false,	wxEmptyString,	wxTRANSLATE("Chinese (Simplified)") },
+	{ wxLANGUAGE_CHINESE_TRADITIONAL,	false,	wxEmptyString,	wxTRANSLATE("Chinese (Traditional)") },
+	{ wxLANGUAGE_CROATIAN,				false,	wxEmptyString,	wxTRANSLATE("Croatian") },
+	{ wxLANGUAGE_CZECH,					false,	wxEmptyString,	wxTRANSLATE("Czech") },
+	{ wxLANGUAGE_DANISH,				false,	wxEmptyString,	wxTRANSLATE("Danish") },
+	{ wxLANGUAGE_DUTCH,					false,	wxEmptyString,	wxTRANSLATE("Dutch") },
+	{ wxLANGUAGE_ENGLISH,				false,	wxEmptyString,	wxTRANSLATE("English (U.K.)") },
+	{ wxLANGUAGE_ESTONIAN,				false,	wxEmptyString,	wxTRANSLATE("Estonian") },
+	{ wxLANGUAGE_FINNISH,				false,	wxEmptyString,	wxTRANSLATE("Finnish") },
+	{ wxLANGUAGE_FRENCH,				false,	wxEmptyString,	wxTRANSLATE("French") },
+	{ wxLANGUAGE_GALICIAN,				false,	wxEmptyString,	wxTRANSLATE("Galician") },
+	{ wxLANGUAGE_GERMAN,				false,	wxEmptyString,	wxTRANSLATE("German") },
+	{ wxLANGUAGE_GREEK,					false,	wxEmptyString,	wxTRANSLATE("Greek") },
+	{ wxLANGUAGE_HEBREW,				false,	wxEmptyString,	wxTRANSLATE("Hebrew") },
+	{ wxLANGUAGE_HUNGARIAN,				false,	wxEmptyString,	wxTRANSLATE("Hungarian") },
+	{ wxLANGUAGE_ITALIAN,				false,	wxEmptyString,	wxTRANSLATE("Italian") },
+	{ wxLANGUAGE_ITALIAN_SWISS,			false,	wxEmptyString,	wxTRANSLATE("Italian (Swiss)") },
+	{ wxLANGUAGE_JAPANESE,				false,	wxEmptyString,	wxTRANSLATE("Japanese") },
+	{ wxLANGUAGE_KOREAN,				false,	wxEmptyString,	wxTRANSLATE("Korean") },
+	{ wxLANGUAGE_LITHUANIAN,			false,	wxEmptyString,	wxTRANSLATE("Lithuanian") },
+	{ wxLANGUAGE_NORWEGIAN_NYNORSK,		false,	wxEmptyString,	wxTRANSLATE("Norwegian (Nynorsk)") },
+	{ wxLANGUAGE_POLISH,				false,	wxEmptyString,	wxTRANSLATE("Polish") },
+	{ wxLANGUAGE_PORTUGUESE,			false,	wxEmptyString,	wxTRANSLATE("Portuguese") },
+	{ wxLANGUAGE_PORTUGUESE_BRAZILIAN,	false,	wxEmptyString,	wxTRANSLATE("Portuguese (Brazilian)") },
+	{ wxLANGUAGE_RUSSIAN,				false,	wxEmptyString,	wxTRANSLATE("Russian") },
+	{ wxLANGUAGE_SLOVENIAN,				false,	wxEmptyString,	wxTRANSLATE("Slovenian") },
+	{ wxLANGUAGE_SPANISH,				false,	wxEmptyString,	wxTRANSLATE("Spanish") },
+	{ wxLANGUAGE_SWEDISH,				false,	wxEmptyString,	wxTRANSLATE("Swedish") },
+	{ wxLANGUAGE_TURKISH,				false,	wxEmptyString,	wxTRANSLATE("Turkish") },
+	{ wxLANGUAGE_UKRAINIAN,				false,	wxEmptyString,	wxTRANSLATE("Ukrainian") },
 };
 
 
@@ -712,19 +743,28 @@ public:
 		int wxId = StrLang2wx(thePrefs::GetLanguageID());
 
 		// Find available languages and translate them
-		aMuleLanguages[0].displayname = wxGetTranslation(aMuleLanguages[0].name);
-		for (unsigned int i = 1; i < itemsof(aMuleLanguages); ++i)
-		{
-			// This supresses error-messages about invalid locales.
-			wxLogNull	logTarget;
-			wxLocale 	locale_to_check;
+		// Todo: replace the dropdown with a static text and a button "change"
+		// and move the dropdown to a popup window opened by the button.
+		// Language is changed rarely, and the go-through-all locales takes a considerable
+		// time when the settings dialog is opened for the first time.
+		if (aMuleLanguages[0].displayname == wxEmptyString) {
+			aMuleLanguages[0].displayname = wxGetTranslation(aMuleLanguages[0].name);
+			for (unsigned int i = 1; i < itemsof(aMuleLanguages); ++i) {
+				if (wxLocale::IsAvailable(aMuleLanguages[i].id)) {
+					// This supresses error-messages about invalid locales.
+					wxLogNull	logTarget;
+					wxLocale 	locale_to_check;
 
-			InitLocale(locale_to_check, aMuleLanguages[i].id);
-			if (locale_to_check.IsOk() && locale_to_check.IsLoaded(wxT(PACKAGE))) {
-				aMuleLanguages[i].displayname = wxString(wxGetTranslation(aMuleLanguages[i].name)) + wxT(" [") + aMuleLanguages[i].name + wxT("]");
-			} else {
-				aMuleLanguages[i].available = false;
+					InitLocale(locale_to_check, aMuleLanguages[i].id);
+					if (locale_to_check.IsOk() && locale_to_check.IsLoaded(wxT(PACKAGE))) {
+						aMuleLanguages[i].displayname = wxString(wxGetTranslation(aMuleLanguages[i].name)) + wxT(" [") + aMuleLanguages[i].name + wxT("]");
+						aMuleLanguages[i].available = true;
+					}
+				}
 			}
+			// Restore original locale
+			wxLocale tmpLocale;
+			InitLocale(tmpLocale, theApp->m_locale.GetLanguage());
 		}
 
 		// Add all available languages and find the index of the selected language.
@@ -736,12 +776,6 @@ public:
 				}
 				j++;
 			}
-		}
-
-		// Restore original locale
-		{
-			wxLocale tmpLocale;
-			InitLocale(tmpLocale, theApp->m_locale.GetLanguage());
 		}
 
 		return Cfg_PureInt::TransferToWindow();
@@ -757,24 +791,22 @@ protected:
 class Cfg_Skin : public Cfg_Str
 {
 public:
-//	Cfg_Tmpl( const wxString& keyname, TYPE& value, const TYPE& defaultVal )
-//	 : Cfg_Base( keyname ),
-//	   m_value( value ),
-//	   m_default( defaultVal ),
-//	   m_widget( NULL )
-//	{}
-//	Cfg_Str( const wxString& keyname, wxString& value, const wxString& defaultVal = wxEmptyString )
-//	 : Cfg_Tmpl<wxString>( keyname, value, defaultVal )
-//	{}
 	Cfg_Skin( const wxString& keyname, wxString& value, const wxString& defaultVal = wxEmptyString )
-	 : Cfg_Str( keyname, value, defaultVal )
-	{
-	}
+		: Cfg_Str( keyname, value, defaultVal ),
+		  m_is_skin(false)
+	{}
 
 #ifndef AMULE_DAEMON
 	virtual bool TransferFromWindow()
 	{
 		if ( Cfg_Str::TransferFromWindow() ) {
+			if (m_is_skin) {
+				wxChoice *skinSelector = dynamic_cast<wxChoice*>(m_widget);
+				// "- default -" is always the first
+				if (skinSelector->GetSelection() == 0) {
+					m_value.Clear();
+				}
+			}
 			return true;
 		}
 
@@ -789,19 +821,20 @@ public:
 		skinSelector->Clear();
 
 		wxString folder;
-		bool skins = false;
 		int flags = wxDIR_DIRS;
 		wxString filespec = wxEmptyString;
+		wxString defaultSelection = _("- default -");
 //#warning there has to be a better way...
 		if ( GetKey() == wxT("/SkinGUIOptions/Skin") ) {
 			folder = wxT("skins");
-			skins = true;
+			m_is_skin = true;
 			flags = wxDIR_FILES;
 			filespec = wxT("*.zip");
+			skinSelector->Append(defaultSelection);
 		} else {
 			folder = wxT("webserver");
 		}
-		wxString dirName(JoinPaths(GetConfigDir(), folder));
+		wxString dirName(JoinPaths(GetConfigDir(theApp->m_configFile), folder));
 		wxString Filename;
 		wxDir d;
 		
@@ -812,7 +845,7 @@ public:
 		{
 			do
 			{
-				if (skins == true) {
+				if (m_is_skin) {
 					Filename = wxT("User:") + Filename;
 				}
 				skinSelector->Append(Filename);
@@ -820,13 +853,14 @@ public:
 			while (d.GetNext(&Filename));
 		}
 
-		wxStandardPathsBase &spb(wxStandardPaths::Get());
-#ifdef __WXMSW__
-		wxString dataDir(spb.GetPluginsDir());
-#elif defined(__WXMAC__)
-		wxString dataDir(spb.GetDataDir());
-#else
-	wxString dataDir(spb.GetDataDir().BeforeLast(wxT('/')) + wxT("/amule"));
+		wxString dataDir;
+		if (m_is_skin) {
+			dataDir = wxStandardPaths::Get().GetDataDir();
+		} else {
+			dataDir = wxStandardPaths::Get().GetResourcesDir();
+		}
+#if !defined(__WXMSW__) && !defined(__WXMAC__)
+		dataDir = dataDir.BeforeLast(wxT('/')) + wxT("/amule");
 #endif
 		wxString systemDir(JoinPaths(dataDir,folder));
 
@@ -837,7 +871,7 @@ public:
 		{
 			do
 			{
-				if (skins == true) {
+				if (m_is_skin) {
 					Filename = wxT("System:") +  Filename;
 				}
 				// avoid duplicates for webserver templates
@@ -846,15 +880,18 @@ public:
 				}
 			}
 			while (d.GetNext(&Filename));
-		}			
+		}
 
 		if ( skinSelector->GetCount() == 0 ) {
-			skinSelector->Append(wxT("no options available"));	
+			skinSelector->Append(_("no options available"));	
 		}
 
 		int id = skinSelector->FindString(m_value);
 		if ( id == wxNOT_FOUND ) {
 			id = 0;
+			if (m_is_skin) {
+				m_value = defaultSelection;
+			}
 		}
 		skinSelector->SetSelection(id);
 
@@ -862,6 +899,8 @@ public:
 	}
 #endif /* ! AMULE_DAEMON */
 
+      protected:
+	bool	m_is_skin;
 };
 
 
@@ -934,16 +973,11 @@ void CPreferences::BuildItemList( const wxString& appdir )
 	 * Browser options
 	 **/
 	#ifdef __WXMAC__
-		int			browser = 9; // this is a "magic number" and will break if
-								 // more browser choices are added in the interface,
-								 // but there isn't a symbolic name defined
 		wxString	customBrowser = wxT("/usr/bin/open");
 	#else 
-		int			browser = 0;
 		wxString	customBrowser; // left empty
 	#endif
 
-	NewCfgItem(IDC_BROWSER,		(MkCfg_Int( wxT("/Browser/DefaultBrowser"), s_Browser, browser )));
 	NewCfgItem(IDC_BROWSERTABS,	(new Cfg_Bool( wxT("/Browser/OpenPageInTab"), s_BrowserTab, true )));
 	NewCfgItem(IDC_BROWSERSELF,	(new Cfg_Str(  wxT("/Browser/CustomBrowserString"), s_CustomBrowser, customBrowser )));
 
@@ -969,7 +1003,7 @@ void CPreferences::BuildItemList( const wxString& appdir )
 	NewCfgItem(IDC_SLOTALLOC,	(MkCfg_Int( wxT("/eMule/SlotAllocation"), s_slotallocation, 2 )));
 	NewCfgItem(IDC_PORT,		(MkCfg_Int( wxT("/eMule/Port"), s_port, DEFAULT_TCP_PORT )));
 	NewCfgItem(IDC_UDPPORT,		(MkCfg_Int( wxT("/eMule/UDPPort"), s_udpport, DEFAULT_UDP_PORT )));
-	NewCfgItem(IDC_UDPDISABLE,	(new Cfg_Bool( wxT("/eMule/UDPDisable"), s_UDPDisable, false )));
+	NewCfgItem(IDC_UDPENABLE,	(new Cfg_Bool( wxT("/eMule/UDPEnable"), s_UDPEnable, true )));
 	NewCfgItem(IDC_ADDRESS,		(new Cfg_Str( wxT("/eMule/Address"), s_Addr, wxEmptyString)));
 	NewCfgItem(IDC_AUTOCONNECT,	(new Cfg_Bool( wxT("/eMule/Autoconnect"), s_autoconnect, true )));
 	NewCfgItem(IDC_MAXSOURCEPERFILE,	(MkCfg_Int( wxT("/eMule/MaxSourcesPerFile"), s_maxsourceperfile, 300 )));
@@ -1089,11 +1123,8 @@ void CPreferences::BuildItemList( const wxString& appdir )
 	NewCfgItem(IDC_FED2KLH,		(new Cfg_Bool( wxT("/Razor_Preferences/FastED2KLinksHandler"), s_FastED2KLinksHandler, true )));
 	NewCfgItem(IDC_PROGBAR,		(new Cfg_Bool( wxT("/ExternalConnect/ShowProgressBar"), s_ProgBar, true )));
 	NewCfgItem(IDC_PERCENT,		(new Cfg_Bool( wxT("/ExternalConnect/ShowPercent"), s_Percent, true )));
-	NewCfgItem(IDC_USESKINFILES,	(new Cfg_Bool( wxT("/SkinGUIOptions/UseSkinFiles"), s_UseSkinFiles, false )));
 	NewCfgItem(IDC_SKIN,		(new Cfg_Skin(  wxT("/SkinGUIOptions/Skin"), s_Skin, wxEmptyString )));
-	NewCfgItem(IDC_SHOWRATEONTITLE,	(new Cfg_Bool( wxT("/eMule/ShowRatesOnTitle"), s_ShowRatesOnTitle, false )));
 	NewCfgItem(IDC_VERTTOOLBAR,	(new Cfg_Bool( wxT("/eMule/VerticalToolbar"), s_ToolbarOrientation, false )));
-	NewCfgItem(IDC_SHOWPARTFILENUMBER,(new Cfg_Bool( wxT("/eMule/ShowPartFileNumber"), s_ShowPartFileNumber, false )));
 	
 	/**
 	 * External Apps
@@ -1135,6 +1166,11 @@ void CPreferences::BuildItemList( const wxString& appdir )
 	NewCfgItem(IDC_MSGFILTER_NONSECURE,	(new Cfg_Bool( wxT("/eMule/MessageFromValidSourcesOnly"),	s_msgsecure, true )));
 	NewCfgItem(IDC_MSGFILTER_WORD,	(new Cfg_Bool( wxT("/eMule/FilterWordMessages"), s_FilterSomeMessages, false )));
 	NewCfgItem(IDC_MSGWORD,		(new Cfg_Str(  wxT("/eMule/MessageFilter"), s_MessageFilterString, wxEmptyString )));
+	NewCfgItem(IDC_MSGLOG,	(new Cfg_Bool( wxT("/eMule/ShowMessagesInLog"), s_ShowMessagesInLog, true )));
+	//Todo NewCfgItem(IDC_MSGADVSPAM,	(new Cfg_Bool( wxT("/eMule/AdvancedSpamFilter"), s_IsAdvancedSpamfilterEnabled, true )));
+	//Todo NewCfgItem(IDC_MSGCAPTCHA,	(new Cfg_Bool( wxT("/eMule/MessageUseCaptchas"), s_IsChatCaptchaEnabled, true )));
+	s_MiscList.push_back( new Cfg_Bool( wxT("/eMule/AdvancedSpamFilter"), s_IsAdvancedSpamfilterEnabled, true ) );
+	s_MiscList.push_back( new Cfg_Bool( wxT("/eMule/MessageUseCaptchas"), s_IsChatCaptchaEnabled, true ) );
 
 	NewCfgItem(IDC_FILTERCOMMENTS,	(new Cfg_Bool( wxT("/eMule/FilterComments"), s_FilterComments, false )));
 	NewCfgItem(IDC_COMMENTWORD,		(new Cfg_Str(  wxT("/eMule/CommentFilter"), s_CommentFilterString, wxEmptyString )));
@@ -1157,14 +1193,15 @@ void CPreferences::BuildItemList( const wxString& appdir )
 	 /**
 	  * Obfuscation
 	  **/
-	 
 	NewCfgItem( IDC_SUPPORT_PO, ( new Cfg_Bool( wxT("/Obfuscation/IsClientCryptLayerSupported"), s_IsClientCryptLayerSupported, true )));
 	NewCfgItem( IDC_ENABLE_PO_OUTGOING, ( new Cfg_Bool( wxT("/Obfuscation/IsCryptLayerRequested"), s_bCryptLayerRequested, true )));
 	NewCfgItem( IDC_ENFORCE_PO_INCOMING, ( new Cfg_Bool( wxT("/Obfuscation/IsClientCryptLayerRequired"), s_IsClientCryptLayerRequired, false )));
+#ifndef CLIENT_GUI	 
 	// There is no need for GUI items for this two.
 	s_MiscList.push_back( MkCfg_Int( wxT("/Obfuscation/CryptoPaddingLenght"), s_byCryptTCPPaddingLength, 254 ) );
 	s_MiscList.push_back( MkCfg_Int( wxT("/Obfuscation/CryptoKadUDPKey"), s_dwKadUDPKey, GetRandomUint32() ) );	 
-	 
+#endif
+
 	/**
 	 * The following doesn't have an associated widget or section
 	 **/
@@ -1182,15 +1219,21 @@ void CPreferences::BuildItemList( const wxString& appdir )
 	
 	s_MiscList.push_back( new Cfg_Bool( wxT("/eMule/DropSlowSources"), 		s_DropSlowSources, false ) );
 		
-	s_MiscList.push_back( new Cfg_Str(  wxT("/eMule/KadNodesUrl"),			s_KadURL, wxT("http://emule-inside.net/nodes.dat") ) );
+	s_MiscList.push_back( new Cfg_Str(  wxT("/eMule/KadNodesUrl"),			s_KadURL, wxT("http://download.tuxfamily.org/technosalad/utils/nodes.dat") ) );
 	s_MiscList.push_back( new Cfg_Str(  wxT("/eMule/Ed2kServersUrl"),		s_Ed2kURL, wxT("http://gruk.org/server.met.gz") ) );
-	
+	s_MiscList.push_back( MkCfg_Int( wxT("/eMule/ShowRatesOnTitle"),		s_showRatesOnTitle, 0 ));
+
+	s_MiscList.push_back( new Cfg_Bool( wxT("/eMule/GeoIPEnabled"), 		s_GeoIPEnabled, true ) );
+	s_MiscList.push_back( new Cfg_Str(  wxT("/eMule/GeoLiteCountryUpdateUrl"),		s_GeoIPUpdateUrl, wxT("http://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/GeoIP.dat.gz") ) );
+	wxConfigBase::Get()->DeleteEntry(wxT("/eMule/GeoIPUpdateUrl")); // get rid of the old one for a while
+
+	s_MiscList.push_back( new Cfg_Str( wxT("/WebServer/Path"),				s_sWebPath, wxT("amuleweb") ) );
+
 #ifndef AMULE_DAEMON
 	// Colors have been moved from global prefs to CStatisticsDlg
 	for ( int i = 0; i < cntStatColors; i++ ) {  
 		wxString str = wxString::Format(wxT("/eMule/StatColor%i"),i);
-		
-		s_MiscList.push_back( MkCfg_Int( str, CStatisticsDlg::acrStat[i], CStatisticsDlg::acrStat[i] ) );
+		s_MiscList.push_back( new Cfg_Colour( str, CStatisticsDlg::acrStat[i] ) );
 	}
 #endif
 
@@ -1228,13 +1271,19 @@ void CPreferences::LoadAllItems(wxConfigBase* cfg)
 #ifndef CLIENT_GUI
 	// Preserve values from old config. The global config object may not be set yet
 	// when BuildItemList() is called, so we need to provide defaults later - here.
-	bool ExecOnCompletion;
-	wxString ExecOnCompletionCommand;
-	cfg->Read(wxT("/eMule/ExecOnCompletion"), &ExecOnCompletion, false);
-	cfg->Read(wxT("/eMule/ExecOnCompletionCommand"), &ExecOnCompletionCommand, wxEmptyString);
-	// Assign to core command, that's the most likely it was.
-	static_cast<Cfg_Bool*>(s_CfgList[USEREVENTS_FIRST_ID + CUserEvents::DownloadCompleted * USEREVENTS_IDS_PER_EVENT + 1])->SetDefault(ExecOnCompletion);
-	static_cast<Cfg_Str*>(s_CfgList[USEREVENTS_FIRST_ID + CUserEvents::DownloadCompleted * USEREVENTS_IDS_PER_EVENT + 2])->SetDefault(ExecOnCompletionCommand);
+	if (cfg->HasEntry(wxT("/eMule/ExecOnCompletion"))) {
+		bool ExecOnCompletion;
+		cfg->Read(wxT("/eMule/ExecOnCompletion"), &ExecOnCompletion, false);
+		// Assign to core command, that's the most likely it was.
+		static_cast<Cfg_Bool*>(s_CfgList[USEREVENTS_FIRST_ID + CUserEvents::DownloadCompleted * USEREVENTS_IDS_PER_EVENT + 1])->SetDefault(ExecOnCompletion);
+		cfg->DeleteEntry(wxT("/eMule/ExecOnCompletion"));
+	}
+	if (cfg->HasEntry(wxT("/eMule/ExecOnCompletionCommand"))) {
+		wxString ExecOnCompletionCommand;
+		cfg->Read(wxT("/eMule/ExecOnCompletionCommand"), &ExecOnCompletionCommand, wxEmptyString);
+		static_cast<Cfg_Str*>(s_CfgList[USEREVENTS_FIRST_ID + CUserEvents::DownloadCompleted * USEREVENTS_IDS_PER_EVENT + 2])->SetDefault(ExecOnCompletionCommand);
+		cfg->DeleteEntry(wxT("/eMule/ExecOnCompletionCommand"));
+	}
 #endif
 	CFGMap::iterator it_a = s_CfgList.begin();
 	for ( ; it_a != s_CfgList.end(); ++it_a ) {
@@ -1246,26 +1295,47 @@ void CPreferences::LoadAllItems(wxConfigBase* cfg)
 		(*it_b)->LoadFromFile( cfg ); 
 	}
 
-// Load debug-categories
+	// Preserve old value of UDPDisable
+	if (cfg->HasEntry(wxT("/eMule/UDPDisable"))) {
+		bool UDPDisable;
+		cfg->Read(wxT("/eMule/UDPDisable"), &UDPDisable, false);
+		SetUDPDisable(UDPDisable);
+		cfg->DeleteEntry(wxT("/eMule/UDPDisable"));
+	}
+
+	// Preserve old value of UseSkinFiles
+	if (cfg->HasEntry(wxT("/SkinGUIOptions/UseSkinFiles"))) {
+		bool UseSkinFiles;
+		cfg->Read(wxT("/SkinGUIOptions/UseSkinFiles"), &UseSkinFiles, false);
+		if (!UseSkinFiles) {
+			s_Skin.Clear();
+		}
+		cfg->DeleteEntry(wxT("/SkinGUIOptions/UseSkinFiles"));
+	}
+
 #ifdef __DEBUG__
-	int count = CLogger::GetDebugCategoryCount();
+	// Load debug-categories
+	int count = theLogger.GetDebugCategoryCount();
 
 	for ( int i = 0; i < count; i++ ) {
-		const CDebugCategory& cat = CLogger::GetDebugCategory( i );
+		const CDebugCategory& cat = theLogger.GetDebugCategory( i );
 		
 		bool enabled = false;
 		cfg->Read( wxT("/Debug/Cat_") + cat.GetName(), &enabled );
 
-		CLogger::SetEnabled( cat.GetType(), enabled );
+		theLogger.SetEnabled( cat.GetType(), enabled );
 	}	
 #endif
 	
 	// Now do some post-processing / sanity checking on the values we just loaded
+#ifndef CLIENT_GUI
 	CheckUlDlRatio();
 	SetPort(s_port);
 	if (s_byCryptTCPPaddingLength > 254) {
 		s_byCryptTCPPaddingLength = GetRandomUint8() % 254;
 	}
+	SetSlotAllocation(s_slotallocation);
+#endif
 }
 
 
@@ -1283,10 +1353,10 @@ void CPreferences::SaveAllItems(wxConfigBase* cfg)
 
 // Save debug-categories
 #ifdef __DEBUG__
-	int count = CLogger::GetDebugCategoryCount();
+	int count = theLogger.GetDebugCategoryCount();
 
 	for ( int i = 0; i < count; i++ ) {
-		const CDebugCategory& cat = CLogger::GetDebugCategory( i );
+		const CDebugCategory& cat = theLogger.GetDebugCategory( i );
 
 		cfg->Write( wxT("/Debug/Cat_") + cat.GetName(), cat.IsEnabled() );
 	}	
@@ -1385,12 +1455,7 @@ void CPreferences::Save()
 
 CPreferences::~CPreferences()
 {
-	while ( !m_CatList.empty() ) {
-		delete m_CatList.front();
-		m_CatList.erase( m_CatList.begin() );
-	}
-
-	m_CatList.clear();
+	DeleteContents(m_CatList);
 }
 
 
@@ -1484,7 +1549,7 @@ void CPreferences::LoadCats()
 
 		// Some sainity checking
 		if ( newcat->title.IsEmpty() || !newcat->path.IsOk() ) {
-			printf("Invalid category found, skipping\n");
+			AddLogLineN(_("Invalid category found, skipping"));
 			
 			delete newcat;
 			continue;
@@ -1558,28 +1623,21 @@ uint32 CPreferences::GetCatColor(size_t index)
 	return m_CatList[index]->color;
 }
 
-Category_Struct *CPreferences::CreateCategory(
+bool CPreferences::CreateCategory(
+	Category_Struct *& category,
 	const wxString& name,
 	const CPath& path,
 	const wxString& comment,
 	uint32 color,
 	uint8 prio)
 {
-	Category_Struct *category = new Category_Struct();
-	category->path		= path;
-	category->title		= name;
-	category->comment	= comment;
-	category->color		= color;
-	category->prio		= prio;
-			
-	AddCat(category);
-	
-	SaveCats();
-	
-	return category;
+	category = new Category_Struct();
+	category->path = thePrefs::GetIncomingDir();	// set a default in case path is invalid
+	uint32 cat = AddCat(category);
+	return UpdateCategory(cat, name, path, comment, color, prio);
 }
 
-void CPreferences::UpdateCategory(
+bool CPreferences::UpdateCategory(
 	uint8 cat, 
 	const wxString& name,
 	const CPath& path,
@@ -1589,66 +1647,45 @@ void CPreferences::UpdateCategory(
 {
 	Category_Struct *category = m_CatList[cat];
 
-	category->path			= path;
+	// return true if path is ok, false if not
+	bool ret = true;
+	if (!path.IsOk() || (!path.DirExists() && !CPath::MakeDir(path))) {
+		ret = false;
+		// keep path as it was
+	} else {
+		category->path		= path;
+	}
 	category->title			= name;
 	category->comment		= comment;
 	category->color			= color;
 	category->prio			= prio;
 	
 	SaveCats();
+	return ret;
 }
 
-// Jacobo221 - Several issues on the browsers:
-// netscape is named Netscape on some systems
-// MozillaFirebird is named mozilla-firebird and also firebird on some systems
-// Niether Galeon tabs nor epiphany tabs have been tested
-// Konqueror alternatives is (Open on current window, fails if no konq already open):
-//	dcop `dcop konqueror-* | head -n1` konqueror-mainwindow#1 openURL '%s'
-// IMPORTANT: if you add cases to the switches and change the number which
-//			  corresponds to s_CustomBrowser, you must change the default
-//			  set for the Mac in BuildItemList, above.
+
 wxString CPreferences::GetBrowser()
 {
-	wxString cmd;
+	wxString cmd(s_CustomBrowser);
 #ifndef __WXMSW__
-	if( s_BrowserTab )
-		switch ( s_Browser ) {
-			case 0: cmd = wxEmptyString; break;
-			case 1: cmd = wxT("kfmclient exec '%s'"); break;
-			case 2: cmd = wxT("sh -c \"if ! mozilla -remote 'openURL(%s, new-tab)'; then mozilla '%s'; fi\""); break;
-			case 3: cmd = wxT("sh -c \"if ! firefox -remote 'openURL(%s, new-tab)'; then firefox '%s'; fi\""); break;
-			case 4: cmd = wxT("sh -c \"if ! MozillaFirebird -remote 'openURL(%s, new-tab)'; then MozillaFirebird '%s'; fi\""); break;
-			case 5: cmd = wxT("opera --newpage '%s'"); break;
-			case 6: cmd = wxT("sh -c \"if ! netscape -remote 'openURLs(%s,new-tab)'; then netscape '%s'; fi\""); break;
-			case 7: cmd = wxT("galeon -n '%s'"); break;
-			case 8: cmd = wxT("epiphany -n '%s'"); break;
-			case 9: cmd = s_CustomBrowser; break;
-			default:
-				AddLogLineM( true, _("Unable to determine selected browser!") );
+	if( s_BrowserTab ) {
+		// This is certainly not the best way to do it, but I'm lazy
+		if ((wxT("mozilla") == cmd.Right(7)) || (wxT("firefox") == cmd.Right(7))
+			|| (wxT("MozillaFirebird") == cmd.Right(15))) {
+			cmd += wxT(" -remote 'openURL(%s, new-tab)'");
 		}
-	else
-		switch ( s_Browser ) {
-			case 0: cmd = wxEmptyString; break;
-			case 1: cmd = wxT("konqueror '%s'"); break;
-			case 2: cmd = wxT("sh -c 'mozilla %s'"); break;
-			case 3: cmd = wxT("firefox '%s'"); break;
-			case 4:	cmd = wxT("MozillaFirebird '%s'"); break;
-			case 5:	cmd = wxT("opera '%s'"); break;
-			case 6: cmd = wxT("netscape '%s'"); break;
-			case 7: cmd = wxT("galeon '%s'"); break;
-			case 8: cmd = wxT("epiphany '%s'"); break;
-			case 9: cmd = s_CustomBrowser; break;
-			default:
-				AddLogLineM( true, _("Unable to determine selected browser!") );
+		if ((wxT("galeon") == cmd.Right(6)) || (wxT("epiphany") == cmd.Right(8))) {
+			cmd += wxT(" -n '%s'");
 		}
-#else
-	switch ( s_Browser ) {
-		case 0: cmd = wxEmptyString; break;
-		case 1: cmd = s_CustomBrowser; break;
-		default:
-			AddLogLineM( true, _("Unable to determine selected browser!") );
+		if (wxT("opera") == cmd.Right(5)) {
+			cmd += wxT(" --newpage '%s'");
+		}
+		if (wxT("netscape") == cmd.Right(8)) {
+			cmd += wxT(" -remote 'openURLs(%s,new-tab)'");
+		}
 	}
-#endif /* !__WXMSW__ / __WXMSW__ */
+#endif /* !__WXMSW__ */
 	return cmd;
 }
 
@@ -1701,8 +1738,7 @@ void CPreferences::ReloadSharedFolders()
 			if (path.DirExists()) {
 				shareddir_list.push_back(path);
 			} else {
-				printf("Dropping non-existing shared directory: %s\n",
-					(const char*)unicode2char(path.GetRaw()));
+				AddLogLineN(CFormat(_("Dropping non-existing shared directory: %s")) % path.GetRaw());
 			}
 		}
 	}

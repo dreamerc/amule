@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -63,8 +63,8 @@
 CUploadQueue::CUploadQueue()
 {
 	m_nLastStartUpload = 0;
-
 	lastupslotHighID = true;
+	m_allowKicking = true;
 }
 
 
@@ -186,9 +186,24 @@ void CUploadQueue::AddUpNextClient(CUpDownClient* directadd)
 
 void CUploadQueue::Process()
 {
-	if (AcceptNewClient() && !m_waitinglist.empty()) {
-		m_nLastStartUpload = ::GetTickCount();
+	// Check if someone's waiting, if there is a slot for him, 
+	// or if we should try to free a slot for him
+	uint32 tick = GetTickCount();
+	// Nobody waiting or upload started recently
+	// (Actually instead of "empty" it should check for "no HighID clients queued",
+	//  but the cost for that outweights the benefit. As it is, a slot will be freed
+	//  even if it can't be taken because all of the queue is LowID. But just one,
+	//  and the kicked client will instantly get it back if he has HighID.)
+	if (m_waitinglist.empty() || tick - m_nLastStartUpload < 1000) {
+		m_allowKicking = false;
+	// Already a slot free, try to fill it
+	} else if (m_uploadinglist.size() < GetMaxSlots()) {
+		m_allowKicking = false;
+		m_nLastStartUpload = tick;
 		AddUpNextClient();
+	// All slots taken, try to free one
+	} else {
+		m_allowKicking = true;
 	}
 
 	// The loop that feeds the upload slots with data.
@@ -199,7 +214,7 @@ void CUploadQueue::Process()
 		
 		// It seems chatting or friend slots can get stuck at times in upload.. This needs looked into..
 		if (!cur_client->GetSocket()) {
-			RemoveFromUploadQueue(cur_client, true);
+			RemoveFromUploadQueue(cur_client);
 			if(cur_client->Disconnected(_T("CUploadQueue::Process"))){
 				cur_client->Safe_Delete();
 			}
@@ -219,21 +234,14 @@ void CUploadQueue::Process()
 }
 
 
-bool CUploadQueue::AcceptNewClient()
+uint16 CUploadQueue::GetMaxSlots() const
 {
-	// check if we can allow a new client to start downloading from us
-	if (::GetTickCount() - m_nLastStartUpload < 1000 || m_uploadinglist.size() >= MAX_UP_CLIENTS_ALLOWED) {
-		return false;
-	}
-
+	uint16 nMaxSlots = 0;
 	float kBpsUpPerClient = (float)thePrefs::GetSlotAllocation();
-	float kBpsUp = theStats::GetUploadRate() / 1024.0f;
 	if (thePrefs::GetMaxUpload() == UNLIMITED) {
-		if (m_uploadinglist.size() < ((uint32)((kBpsUp)/kBpsUpPerClient)+2)) {
-			return true;
-		}
+		float kBpsUp = theStats::GetUploadRate() / 1024.0f;
+		nMaxSlots = (uint16)(kBpsUp / kBpsUpPerClient) + 2;
 	} else {
-		uint16 nMaxSlots = 0;
 		if (thePrefs::GetMaxUpload() >= 10) {
 			nMaxSlots = (uint16)floor((float)thePrefs::GetMaxUpload() / kBpsUpPerClient + 0.5);
 				// floor(x + 0.5) is a way of doing round(x) that works with gcc < 3 ...
@@ -243,12 +251,11 @@ bool CUploadQueue::AcceptNewClient()
 		} else {
 			nMaxSlots = MIN_UP_CLIENTS_ALLOWED;
 		}
-
-		if (m_uploadinglist.size() < nMaxSlots) {
-			return true;
-		}
 	}
-	return false;
+	if (nMaxSlots > MAX_UP_CLIENTS_ALLOWED) {
+		nMaxSlots = MAX_UP_CLIENTS_ALLOWED;
+	}
+	return nMaxSlots;
 }
 
 
@@ -326,10 +333,24 @@ void CUploadQueue::AddClientToQueue(CUpDownClient* client)
 		
 		if ( IsOnUploadQueue( cur_client ) ) {
 			if ( cur_client == client ) {
-				if ( client->m_bAddNextConnect && ( ( m_uploadinglist.size() < thePrefs::GetMaxUpload() ) || ( thePrefs::GetMaxUpload() == UNLIMITED ) ) ) {
+				// This is where LowID clients get their upload slot assigned.
+				// They can't be contacted if they reach top of the queue, so they are just marked for uploading.
+				// When they reconnect next time AddClientToQueue() is called, and they get their slot
+				// through the connection they initiated.
+				// Since at that time no slot is free they get assigned an extra slot,
+				// so then the number of slots exceeds the configured number by one.
+				// To prevent a further increase no more LowID clients get a slot, until 
+				// - a HighID client has got one (which happens only after two clients 
+				//   have been kicked so a slot is free again)
+				// - or there is a free slot, which means there is no HighID client on queue
+				if (client->m_bAddNextConnect) {
+					uint16 maxSlots = GetMaxSlots();
 					if (lastupslotHighID) {
+						maxSlots++;
+					}
+					if (m_uploadinglist.size() < maxSlots) {
 						client->m_bAddNextConnect = false;
-						RemoveFromWaitingQueue(client, true);
+						RemoveFromWaitingQueue(client);
 						AddUpNextClient(client);
 						lastupslotHighID = false; // LowID alternate
 						return;
@@ -408,13 +429,15 @@ void CUploadQueue::AddClientToQueue(CUpDownClient* client)
 		return;
 	}
 
-	if (m_waitinglist.empty() && AcceptNewClient()) {
+	uint32 tick = GetTickCount();
+	client->ClearWaitStartTime();
+	// if possible start upload right away
+	if (m_waitinglist.empty() && tick - m_nLastStartUpload >= 1000 && m_uploadinglist.size() < GetMaxSlots()) {
 		AddUpNextClient(client);
-		m_nLastStartUpload = ::GetTickCount();
+		m_nLastStartUpload = tick;
 	} else {
 		m_waitinglist.push_back(client);
 		theStats::AddWaitingClient();
-		client->ClearWaitStartTime();
 		client->ClearAskedCount();
 		client->SetUploadState(US_ONUPLOADQUEUE);
 		client->SendRankingInfo();
@@ -424,7 +447,7 @@ void CUploadQueue::AddClientToQueue(CUpDownClient* client)
 }
 
 
-bool CUploadQueue::RemoveFromUploadQueue(CUpDownClient* client, bool updatewindow)
+bool CUploadQueue::RemoveFromUploadQueue(CUpDownClient* client)
 {
 	// Keep track of this client
 	theApp->clientlist->AddTrackClient(client);
@@ -433,9 +456,7 @@ bool CUploadQueue::RemoveFromUploadQueue(CUpDownClient* client, bool updatewindo
 			m_uploadinglist.end(), client);
 	
 	if (it != m_uploadinglist.end()) {
-		if (updatewindow) {
-			Notify_UploadCtrlRemoveClient(client);
-		}
+		Notify_UploadCtrlRemoveClient(client);
 		m_uploadinglist.erase(it);
 		theStats::RemoveUploadingClient();
 		if( client->GetTransferredUp() ) {
@@ -455,25 +476,58 @@ bool CUploadQueue::RemoveFromUploadQueue(CUpDownClient* client, bool updatewindo
 
 bool CUploadQueue::CheckForTimeOver(CUpDownClient* client)
 {
-	if (thePrefs::TransferFullChunks()) {
-		if( client->GetUpStartTimeDelay() > 3600000 ) { // Try to keep the clients from downloading forever.
-			return true;
+	// Don't kick anybody if there's no need to
+	if (!m_allowKicking) {
+		return false;
+	}
+	// First, check if it is a VIP slot (friend or Release-Prio).
+	if (client->GetFriendSlot()) {
+		return false;	// never drop the friend
+	}
+	// Release-Prio and nobody on queue for it?
+	if (client->GetUploadFile()->GetUpPriority() == PR_POWERSHARE) {
+		// Keep it unless half of the UL slots are occupied with friends or Release uploads.
+		uint16 vips = 0;
+		for (CClientPtrList::iterator it = m_uploadinglist.begin(); it != m_uploadinglist.end(); ++it) {
+			CUpDownClient* cur_client = *it;
+			if (cur_client->GetFriendSlot() || cur_client->GetUploadFile()->GetUpPriority() == PR_POWERSHARE) {
+				vips++;
+			}
 		}
-		// For some reason, some clients can continue to download after a chunk size.
-		// Are they redownloading the same chunk over and over????
-		if( client->GetSessionUp() > 10485760 ) {
-			return true;
+		// allow if VIP uploads occupy at most half of the possible upload slots
+		if (vips <= GetMaxSlots() / 2) {
+			return false;
+		}
+		// Otherwise normal rules apply.
+	}
+
+	// Ordinary slots
+	bool kickHim = false;
+
+	if (thePrefs::TransferFullChunks()) {
+		// "Transfer full chunks": drop client after 10 MB upload, or after an hour.
+		// (so average UL speed should at least be 2.84 kB/s)
+		// We don't track what he is downloading, but if it's all from one chunk he gets it.
+		if (client->GetUpStartTimeDelay() > 3600000 	// time: 1h
+			|| client->GetSessionUp() > 10485760) {		// data: 10MB
+			kickHim = true;
 		}
 	} else {
+		uint32 clientScore = client->GetScore(true,true);
 		CClientPtrList::iterator it = m_waitinglist.begin();
 		for (; it != m_waitinglist.end(); ++it ) {
-			if (client->GetScore(true,true) < (*it)->GetScore(true,false)) {
-				return true;
+			if (clientScore < (*it)->GetScore(true,false)) {
+				kickHim = true;
+				break;
 			}
 		}
 	}
+
+	if (kickHim) {
+		m_allowKicking = false;		// kick max one client per cycle
+	}
 	
-	return false;
+	return kickHim;
 }
 
 
@@ -515,10 +569,11 @@ void CUploadQueue::ResumeUpload( const CMD4Hash& filehash )
 /*
  * This function adds a file indicated by filehash to suspended_uploads_list
  */
-void CUploadQueue::SuspendUpload( const CMD4Hash& filehash )
+uint16 CUploadQueue::SuspendUpload( const CMD4Hash& filehash )
 {
 	AddLogLineM( false, CFormat( _("Suspending upload of file: %s" ) )
 				% filehash.Encode() );
+	uint16 removed = 0;
 
 	//Append the filehash to the list.
 	suspended_uploads_list.push_back(filehash);
@@ -530,7 +585,7 @@ void CUploadQueue::SuspendUpload( const CMD4Hash& filehash )
 		//check if the client is uploading the file we need to suspend
 		if(potential->GetUploadFileID() == filehash) {
 			//remove the unlucky client from the upload queue and add to the waiting queue
-			RemoveFromUploadQueue(potential, true);
+			RemoveFromUploadQueue(potential);
 
 			m_waitinglist.push_back(potential);
 			theStats::AddWaitingClient();
@@ -538,20 +593,20 @@ void CUploadQueue::SuspendUpload( const CMD4Hash& filehash )
 			potential->SendRankingInfo();
 			Notify_QlistRefreshClient(potential);
 			Notify_ShowQueueCount(m_waitinglist.size());
+			removed++;
 		}
 	}
+	return removed;
 }
 
-bool CUploadQueue::RemoveFromWaitingQueue(CUpDownClient* client, bool updatewindow)
+bool CUploadQueue::RemoveFromWaitingQueue(CUpDownClient* client)
 {
 	CClientPtrList::iterator it = std::find(m_waitinglist.begin(),
 			m_waitinglist.end(), client);
 	
 	if (it != m_waitinglist.end()) {
 		RemoveFromWaitingQueue(it);
-		if (updatewindow) {
-			Notify_ShowQueueCount(m_waitinglist.size());
-		}
+		Notify_ShowQueueCount(m_waitinglist.size());
 		return true;
 	} else {
 		return false;

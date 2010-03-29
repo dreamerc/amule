@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -102,7 +102,7 @@ void CServerSocketHandler::ServerSocketHandler(wxSocketEvent& event)
 			socket->OnSend(wxSOCKET_NOERROR);
 			break;
 		default:
-			wxASSERT(0);
+			wxFAIL;
 			break;
 	}
 	
@@ -354,7 +354,7 @@ bool CServerSocket::ProcessPacket(const byte* packet, uint32 size, int8 opcode)
 				if (size >= 4 + 4 + 4 + 4 + 4 /* All of the above + reported ip + obfuscation port */) {
 					dwServerReportedIP = data.ReadUInt32();
 					if (::IsLowID(dwServerReportedIP)){
-						wxASSERT( false );
+						wxFAIL;
 						dwServerReportedIP = 0;
 					}
 					wxASSERT( dwServerReportedIP == new_id || ::IsLowID(new_id) );
@@ -546,7 +546,7 @@ bool CServerSocket::ProcessPacket(const byte* packet, uint32 size, int8 opcode)
 				AddDebugLogLineM(false,logServer,wxT("Server: OP_CALLBACKREQUESTED"));
 				
 				theStats::AddDownOverheadServer(size);
-				if (size == 6) {
+				if (size >= 6) {
 					CMemFile data(packet,size);
 					uint32 dwIP = data.ReadUInt32();
 					uint16 nPort = data.ReadUInt16();
@@ -559,6 +559,11 @@ bool CServerSocket::ProcessPacket(const byte* packet, uint32 size, int8 opcode)
 					}
 					
 					CUpDownClient* client = theApp->clientlist->FindClientByIP(dwIP,nPort);
+
+					if (!client) {
+						client = new CUpDownClient(nPort,dwIP,0,0,0, true, true);
+						theApp->clientlist->AddClient(client);
+					}
 					if (size >= 23 && client->HasValidHash()){
 						if (client->GetUserHash() != achUserHash){
 							AddDebugLogLineM(false, logServer, wxT("Reported Userhash from OP_CALLBACKREQUESTED differs with our stored hash"));
@@ -574,13 +579,7 @@ bool CServerSocket::ProcessPacket(const byte* packet, uint32 size, int8 opcode)
 						client->SetConnectOptions(byCryptOptions, true, false);
 					}
 					
-					if (client) {
-						client->TryToConnect();
-					} else {
-						client = new CUpDownClient(nPort,dwIP,0,0,0, true, true);
-						theApp->clientlist->AddClient(client);
-						client->TryToConnect();
-					}
+					client->TryToConnect();
 				}
 				break;
 			}
@@ -621,7 +620,7 @@ void CServerSocket::ConnectToServer(CServer* server, bool bNoCrypt)
 	AddDebugLogLineM(false,logServer,wxT("Trying to connect"));
 	
 	if (cur_server){
-		wxASSERT(0);
+		wxFAIL;
 		delete cur_server;
 		cur_server = NULL;
 	}

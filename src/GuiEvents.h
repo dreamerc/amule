@@ -1,9 +1,9 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2004-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2004-2009 Angel Vidal Veiga (kry@users.sourceforge.net)
-// Copyright (c) 2004-2009 Froenchenko Leonid (lfroen@users.sourceforge.net)
+// Copyright (c) 2004-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2004-2008 Angel Vidal ( kry@amule.org )
+// Copyright (c) 2004-2008 Froenchenko Leonid (lfroen@users.sourceforge.net)
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -27,7 +27,7 @@
 #ifndef GUIEVENTS_H
 #define GUIEVENTS_H
 
-#include <wx/app.h>
+#include <wx/event.h>
 
 #include "Types.h"
 #include "Constants.h"
@@ -38,6 +38,7 @@ class CKnownFile;
 class CSearchFile;
 class CPartFile;
 class CServer;
+class CFriend;
 
 
 DECLARE_LOCAL_EVENT_TYPE(MULE_EVT_NOTIFY, -1)
@@ -112,9 +113,10 @@ namespace MuleNotify
 	void Search_Update_Sources(CSearchFile* result);
 	void Search_Add_Result(CSearchFile* result);
 
-	void ChatRefreshFriend(uint32 lastUsedIP, uint32 lastUsedPort, wxString name);
+	void ChatRefreshFriend(CFriend* Friend, bool connected);
 	void ChatConnResult(bool success, uint64 id, wxString message);
 	void ChatProcessMsg(uint64 sender, wxString message);
+	void ChatSendCaptcha(wxString captcha, uint64 to_id);
 	
 	void ShowConnState(long state);
 	void ShowUserCount(wxString str);
@@ -461,9 +463,10 @@ typedef void (wxEvtHandler::*MuleNotifyEventFunction)(CMuleGUIEvent&);
 #define Notify_Search_Add_Result(s)			MuleNotify::DoNotify(&MuleNotify::Search_Add_Result, s)
 
 // chat
-#define Notify_ChatRefreshFriend(val0, val1, s)		MuleNotify::DoNotify(&MuleNotify::ChatRefreshFriend, val0, val1, s)
+#define Notify_ChatRefreshFriend(ptr, val)		MuleNotify::DoNotify(&MuleNotify::ChatRefreshFriend, ptr, val)
 #define Notify_ChatConnResult(val0, val1, s)		MuleNotify::DoNotify(&MuleNotify::ChatConnResult, val0, val1, s)
 #define Notify_ChatProcessMsg(val0, s)			MuleNotify::DoNotify(&MuleNotify::ChatProcessMsg, val0, s)
+#define Notify_ChatSendCaptcha(val0, s)			MuleNotify::DoNotify(&MuleNotify::ChatSendCaptcha, val0, s)
 
 // misc
 #define Notify_ShowConnState(val)			MuleNotify::DoNotify(&MuleNotify::ShowConnState, val)

@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 Kry ( elkry@sourceforge.net / http://www.amule.org )
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2003-2008 Angel Vidal ( kry@amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -31,7 +31,7 @@
 
 #include "../../../KnownFile.h"		// Needed for PS_*
 
-wxString CEC_PartFile_Tag::GetFileStatusString()
+wxString CEC_PartFile_Tag::GetFileStatusString() const
 {
 	uint8 nFileStatus = FileStatus();
 	
@@ -112,7 +112,7 @@ void FormatValue(CFormat& format, const CECTag* tag)
 			format = format % tag->GetInt();
 			break;
 		case EC_VALUE_ISTRING:
-			format = format % (wxString::Format(wxT("%") wxLongLongFmtSpec wxT("u"), tag->GetInt()) + extra);
+			format = format % (wxString::Format(wxT("%") WXLONGLONGFMTSPEC wxT("u"), tag->GetInt()) + extra);
 			break;
 		case EC_VALUE_BYTES:
 			format = format % (CastItoXBytes(tag->GetInt()) + extra);
@@ -133,7 +133,7 @@ void FormatValue(CFormat& format, const CECTag* tag)
 			format = format % tag->GetDoubleData();
 			break;
 		default:
-			wxASSERT(0);
+			wxFAIL;
 	}
 }
 

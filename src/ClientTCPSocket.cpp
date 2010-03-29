@@ -1,9 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
-//
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )//
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
 // respective authors.
@@ -77,7 +76,14 @@ END_EVENT_TABLE()
 
 void CClientTCPSocketHandler::ClientTCPSocketHandler(wxSocketEvent& event)
 {
-	CClientTCPSocket *socket = dynamic_cast<CClientTCPSocket *>(event.GetSocket());
+	wxSocketBase* baseSocket = event.GetSocket();
+//	wxASSERT(baseSocket);	// Rather want a log message right now. Enough other wx problems. >:(
+	if (!baseSocket) {		// WTF?
+		AddDebugLogLineM(false, logClient, wxT("received bad wxSocketEvent"));
+		return;
+	}
+
+	CClientTCPSocket *socket = dynamic_cast<CClientTCPSocket *>(baseSocket);
 	wxASSERT(socket);
 	if (!socket) {
 		return;
@@ -103,7 +109,7 @@ void CClientTCPSocketHandler::ClientTCPSocketHandler(wxSocketEvent& event)
 			break;
 		default:
 			// Nothing should arrive here...
-			wxASSERT(0);
+			wxFAIL;
 			break;
 	}
 }
@@ -294,7 +300,7 @@ bool CClientTCPSocket::ProcessPacket(const byte* buffer, uint32 size, uint8 opco
 	if (!m_client && opcode != OP_HELLO) {
 		throw wxString(wxT("Asks for something without saying hello"));
 	} else if (m_client && opcode != OP_HELLO && opcode != OP_HELLOANSWER) {
-		m_client->CheckHandshakeFinished(OP_EDONKEYPROT, opcode);
+		m_client->CheckHandshakeFinished();
 	}
 	
 	switch(opcode) {
@@ -582,7 +588,7 @@ bool CClientTCPSocket::ProcessPacket(const byte* buffer, uint32 size, uint8 opco
 			
 			theStats::AddDownOverheadFileRequest(size);
 		
-			if (!m_client->CheckHandshakeFinished(OP_EDONKEYPROT, opcode)) {
+			if (!m_client->CheckHandshakeFinished()) {
 				break;
 			}
 			
@@ -663,9 +669,7 @@ bool CClientTCPSocket::ProcessPacket(const byte* buffer, uint32 size, uint8 opco
 			
 			theStats::AddDownOverheadFileRequest(size);
 			theApp->uploadqueue->RemoveFromUploadQueue(m_client);
-			if ( CLogger::IsEnabled( logClient ) ) {
-				AddDebugLogLineM( false, logClient, m_client->GetUserName() + wxT(": Upload session ended due canceled transfer."));
-			}
+			AddDebugLogLineM( false, logClient, m_client->GetUserName() + wxT(": Upload session ended due canceled transfer."));
 			break;
 		}
 		
@@ -675,9 +679,7 @@ bool CClientTCPSocket::ProcessPacket(const byte* buffer, uint32 size, uint8 opco
 			theStats::AddDownOverheadFileRequest(size);
 			if (size>=16 && m_client->GetUploadFileID() == CMD4Hash(buffer)) {
 				theApp->uploadqueue->RemoveFromUploadQueue(m_client);
-				if ( CLogger::IsEnabled( logClient ) ) {
-					AddDebugLogLineM( false, logClient, m_client->GetUserName() + wxT(": Upload session ended due ended transfer."));
-				}
+				AddDebugLogLineM( false, logClient, m_client->GetUserName() + wxT(": Upload session ended due ended transfer."));
 			}
 			break;
 		}
@@ -794,16 +796,27 @@ bool CClientTCPSocket::ProcessPacket(const byte* buffer, uint32 size, uint8 opco
 			
 			theStats::AddDownOverheadOther(size);
 			
-			CMemFile message_file(buffer, size);
-
-			wxString message = message_file.ReadString((m_client->GetUnicodeSupport() != utf8strNone));
-			if (IsMessageFiltered(message, m_client)) {
-				AddLogLineM( true, CFormat(_("Message filtered from '%s' (IP:%s)")) % m_client->GetUserName() % m_client->GetFullIP());
-			} else {
-				AddLogLineM( true, CFormat(_("New message from '%s' (IP:%s)")) % m_client->GetUserName() % m_client->GetFullIP());
-				
-				Notify_ChatProcessMsg(GUI_ID(m_client->GetIP(),m_client->GetUserPort()), m_client->GetUserName() + wxT("|") + message);
+			if (size < 2) {
+				throw wxString(wxT("invalid message packet"));
 			}
+			CMemFile message_file(buffer, size);
+			uint16 length = message_file.ReadUInt16();
+			if (length + 2u != size) {
+				throw wxString(wxT("invalid message packet"));
+			}
+
+			// limit message length
+			static const uint16 MAX_CLIENT_MSG_LEN = 450;
+
+			if (length > MAX_CLIENT_MSG_LEN) {
+				AddDebugLogLineN(logRemoteClient, CFormat(wxT("Message from '%s' (IP:%s) exceeds limit by %u chars, truncated."))
+					% m_client->GetUserName() % m_client->GetFullIP() % (length - MAX_CLIENT_MSG_LEN));
+				length = MAX_CLIENT_MSG_LEN;
+			}					
+
+			wxString message = message_file.ReadOnlyString((m_client->GetUnicodeSupport() != utf8strNone), length);
+			m_client->ProcessChatMessage(message);
+
 			break;
 		}
 		
@@ -1075,8 +1088,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 		throw wxString(wxT("Unknown clients sends extended protocol packet"));
 	}
 	/*
-	if (!client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-		// Here comes a extended packet without finishing the hanshake.
+	if (!client->CheckHandshakeFinished()) {
+		// Here comes an extended packet without finishing the handshake.
 		// IMHO, we should disconnect the client.
 		throw wxString(wxT("Client send extended packet before finishing handshake"));
 	}
@@ -1093,8 +1106,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 				break;
 			}
 
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_MULTIPACKET before finishing handshake"));
 			}
@@ -1248,8 +1261,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 				Kademlia::CKademlia::Bootstrap(wxUINT32_SWAP_ALWAYS(m_client->GetIP()), m_client->GetKadPort(), m_client->GetKadVersion() > 1);
 			}
 
- 			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_MULTIPACKETANSWER before finishing handshake"));
 			}
@@ -1341,8 +1354,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 		case OP_SECIDENTSTATE:{		// 0.43b
 			AddDebugLogLineM( false, logRemoteClient, wxT("Remote Client: OP_SECIDENTSTATE from ") + m_client->GetFullIP() );
 			
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_SECIDENTSTATE before finishing handshake"));
 			}								
@@ -1370,8 +1383,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 				break;						
 			}
 			
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_PUBLICKEY before finishing handshake"));
 			}
@@ -1382,8 +1395,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 		case OP_SIGNATURE:{			// 0.43b
 			AddDebugLogLineM( false, logRemoteClient, wxT("Remote Client: OP_SIGNATURE from ") + m_client->GetFullIP() );
 			
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_COMPRESSEDPART before finishing handshake"));
 			}
@@ -1398,8 +1411,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 		case OP_COMPRESSEDPART: {	// 0.47a
 			if (opcode == OP_COMPRESSEDPART) AddDebugLogLineM( false, logRemoteClient, wxT("Remote Client: OP_COMPRESSEDPART from ") + m_client->GetFullIP() );
 			
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_COMPRESSEDPART before finishing handshake"));
 			}
@@ -1459,8 +1472,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 			
 			theStats::AddDownOverheadOther(size);
 			
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_QUEUERANKING before finishing handshake"));
 			}
@@ -1480,7 +1493,7 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 			
 			theStats::AddDownOverheadSourceExchange(size);
 
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
+			if (!m_client->CheckHandshakeFinished()) {
 				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_REQUESTSOURCES before finishing handshake"));
@@ -1542,8 +1555,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 			
 			theStats::AddDownOverheadSourceExchange(size);
 
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_ANSWERSOURCES before finishing handshake"));
 			}
@@ -1567,8 +1580,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 			//printf("Received OP_ANSWERSOURCES2\n");
 			theStats::AddDownOverheadSourceExchange(size);
 
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_ANSWERSOURCES2 before finishing handshake"));
 			}
@@ -1593,8 +1606,8 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 			
 			theStats::AddDownOverheadFileRequest(size);
 
-			if (!m_client->CheckHandshakeFinished(OP_EMULEPROT, opcode)) {
-				// Here comes a extended packet without finishing the hanshake.
+			if (!m_client->CheckHandshakeFinished()) {
+				// Here comes an extended packet without finishing the handshake.
 				// IMHO, we should disconnect the client.
 				throw wxString(wxT("Client send OP_FILEDESC before finishing handshake"));
 			}
@@ -1820,6 +1833,23 @@ bool CClientTCPSocket::ProcessExtPacket(const byte* buffer, uint32 size, uint8 o
 			}
 			break;
 		}
+		case OP_CHATCAPTCHAREQ:
+		{
+			AddDebugLogLineN(logRemoteClient, wxT("Remote Client: OP_CHATCAPTCHAREQ from ") + m_client->GetFullIP());
+			theStats::AddDownOverheadOther(size);
+			CMemFile data_in(buffer, size);
+			m_client->ProcessCaptchaRequest(&data_in);
+			break;
+		}
+		case OP_CHATCAPTCHARES:
+		{
+			AddDebugLogLineN(logRemoteClient, wxT("Remote Client: OP_CHATCAPTCHARES from ") + m_client->GetFullIP());
+			theStats::AddDownOverheadOther(size);
+			if (size) {
+				m_client->ProcessCaptchaReqRes(buffer[0]);
+			}
+			break;
+		}
 		case OP_FWCHECKUDPREQ: { // Support required for Kadversion >= 6
 			AddDebugLogLineM(false, logRemoteClient, wxT("Remote Client: OP_FWCHECKUDPREQ from ") + m_client->GetFullIP());
 			theStats::AddDownOverheadOther(size);
@@ -1866,6 +1896,7 @@ bool CClientTCPSocket::ProcessED2Kv2Packet(const byte* buffer, uint32 size, uint
 				
 				uint8 numtags = data.ReadUInt8();
 				wxASSERT(numtags == 1);
+				if(numtags){}	// prevent GCC warning
 				
 				m_client->SetRemoteQueueRank(data.GetIntTagValue());
 				
@@ -1960,7 +1991,7 @@ void CClientTCPSocket::OnError(int nErrorCode)
 			strError += wxT("caused a socket blocking error.");
 		}
 	} else {
-		if ( CLogger::IsEnabled( logClient ) && (nErrorCode != 107)) {
+		if (theLogger.IsEnabled(logClient) && nErrorCode != 107) {
 			// 0    -> No Error / Disconect
 			// 107  -> Transport endpoint is not connected
 			if (m_client) {
@@ -2036,7 +2067,7 @@ bool CClientTCPSocket::PacketReceived(CPacket* packet)
 				case OP_ED2KV2PACKEDPROT:				
 				case OP_PACKEDPROT:
 					// Packed inside packed?
-					wxASSERT(0);
+					wxFAIL;
 					break;
 				default: {
 					theStats::AddDownOverheadOther(uRawSize);
@@ -2083,22 +2114,6 @@ bool CClientTCPSocket::PacketReceived(CPacket* packet)
 	return bResult;
 }
 
-
-bool CClientTCPSocket::IsMessageFiltered(const wxString& Message, CUpDownClient* client) {
-	
-	bool filtered = false;
-	// If we're chatting to the guy, we don't want to filter!
-	if (client->GetChatState() != MS_CHATTING) {
-		if (thePrefs::MsgOnlyFriends() && !client->IsFriend()) {
-			filtered = true;
-		} else if (thePrefs::MsgOnlySecure() && client->GetUserName().IsEmpty() ) {
-			filtered = true;
-		} else if (thePrefs::MustFilterMessages()) {
-			filtered = thePrefs::IsMessageFiltered(Message);
-		}
-	}
-	return filtered;
-}
 
 SocketSentBytes CClientTCPSocket::SendControlData(uint32 maxNumberOfBytesToSend, uint32 overchargeMaxBytesToSend)
 {

@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2004-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2004-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -22,8 +22,16 @@
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301, USA
 //
 
+#ifdef __DEBUG__
+#define DEBUG_EC_IMPLEMENTATION
+
+#include <common/Format.h>  // Needed for CFormat
+#endif
+
 #include "ECTag.h"	// Needed for ECTag
 #include "ECSocket.h"	// Needed for CECSocket
+#include "ECSpecialTags.h"	// Needed for CValueMap
+#include "ECID.h"	// Needed for CECID
 
 /**********************************************************
  *							  *
@@ -32,27 +40,19 @@
  **********************************************************/
 
 //! Defines the Null tag which may be returned by GetTagByNameSafe.
-const CECTag CECTag::s_theNullTag(static_cast<NullTagConstructorSelector*>(0));
-
-//! Defines the data for the Null tag.  Large enough (16 bytes) for GetMD4Data.
-const uint32 CECTag::s_theNullTagData[4] = { 0, 0, 0, 0 };
+const CECTag CECTag::s_theNullTag;
 
 /**
  * Creates a new null-valued CECTag instance
  *
  * @see s_theNullTag
- * @see s_theNullTagData
  * @see GetTagByNameSafe
  */
-CECTag::CECTag(const NullTagConstructorSelector*) :
-	m_error(0),
-	m_tagData(s_theNullTagData),
+CECTag::CECTag() :
 	m_tagName(0),
-	m_dataLen(0),
 	m_dataType(EC_TAGTYPE_UNKNOWN),
-	m_dynamic(false),
-	m_tagList(),
-	m_haschildren(false)
+	m_dataLen(0),
+	m_tagData(NULL)	// All access functions check m_dataType, so no need to allocate a dummy buffer.
 {
 }
 
@@ -62,25 +62,16 @@ CECTag::CECTag(const NullTagConstructorSelector*) :
  * @param name	 TAG name
  * @param length length of data buffer
  * @param data	 TAG data
- * @param copy	 whether to create a copy of the TAG data at \e *data, or should use the provided pointer.
  *
- * \note When you set \e copy to \b false, the provided data buffer must exist
- * in the whole lifetime of the packet.
  */
-CECTag::CECTag(ec_tagname_t name, unsigned int length, const void *data, bool copy) : m_tagName(name), m_dynamic(copy), m_haschildren( false )
+CECTag::CECTag(ec_tagname_t name, unsigned int length, const void *data) : m_tagName(name)
 {
-	m_error = 0;
 	m_dataLen = length;
-	if (copy && (data != NULL)) {
-		m_tagData = malloc(m_dataLen);
-		if (m_tagData != NULL) {
-			memcpy((void *)m_tagData, data, m_dataLen);
-		} else {
-			m_dataLen = 0;
-			m_error = 1;
-		}
+	if (data) {
+		NewData();
+		memcpy(m_tagData, data, m_dataLen);
 	} else {
-		m_tagData = data;
+		m_tagData = NULL;
 	}
 	m_dataType = EC_TAGTYPE_CUSTOM;
 }
@@ -90,20 +81,15 @@ CECTag::CECTag(ec_tagname_t name, unsigned int length, const void *data, bool co
  *
  * @param name	 	TAG name
  * @param length 	length of data buffer that will be alloc'ed
- * @param dataptr	pointer to internal TAG data buffer
+ * @param dataptr	pointer to a void pointer which will be assigned the internal TAG data buffer
  *
- * 
+ * \note TAG data buffer has to be filled with valid data after the ctor
  */
-CECTag::CECTag(ec_tagname_t name, unsigned int length, void **dataptr)  : m_tagName(name), m_dynamic(true), m_haschildren( false )
+CECTag::CECTag(ec_tagname_t name, unsigned int length, void **dataptr)  : m_tagName(name)
 {
-	m_error = 0;
 	m_dataLen = length;
-	m_tagData = malloc(m_dataLen);
-	if ( !m_tagData ) {
-		m_dataLen = 0;
-		m_error = 1;
-	}
-	*dataptr = (void *)m_tagData;
+	NewData();
+	*dataptr = m_tagData;
 	m_dataType = EC_TAGTYPE_CUSTOM;
 }
 
@@ -117,19 +103,14 @@ CECTag::CECTag(ec_tagname_t name, unsigned int length, void **dataptr)  : m_tagN
  *
  * @see GetIPv4Data()
  */
-CECTag::CECTag(ec_tagname_t name, const EC_IPv4_t& data) : m_tagName(name), m_dynamic(true), m_haschildren( false )
+CECTag::CECTag(ec_tagname_t name, const EC_IPv4_t& data) : m_tagName(name)
 {
 
 	m_dataLen = sizeof(EC_IPv4_t);
-	m_tagData = malloc(sizeof(EC_IPv4_t));
-	if (m_tagData != NULL) {
-		RawPokeUInt32( ((EC_IPv4_t *)m_tagData)->m_ip, RawPeekUInt32( data.m_ip ) );
-		((EC_IPv4_t *)m_tagData)->m_port = ENDIAN_HTONS(data.m_port);
-		m_error = 0;
-		m_dataType = EC_TAGTYPE_IPV4;
-	} else {
-		m_error = 1;
-	}
+	NewData();
+	RawPokeUInt32( ((EC_IPv4_t *)m_tagData)->m_ip, RawPeekUInt32( data.m_ip ) );
+	((EC_IPv4_t *)m_tagData)->m_port = ENDIAN_HTONS(data.m_port);
+	m_dataType = EC_TAGTYPE_IPV4;
 }
 
 /**
@@ -142,19 +123,13 @@ CECTag::CECTag(ec_tagname_t name, const EC_IPv4_t& data) : m_tagName(name), m_dy
  *
  * @see GetMD4Data()
  */
-CECTag::CECTag(ec_tagname_t name, const CMD4Hash& data) : m_tagName(name), m_dynamic(true), m_haschildren( false )
+CECTag::CECTag(ec_tagname_t name, const CMD4Hash& data) : m_tagName(name)
 {
-
 	m_dataLen = 16;
-	m_tagData = malloc(16);
-	if (m_tagData != NULL) {
-		RawPokeUInt64( (char*)m_tagData,		RawPeekUInt64( data.GetHash() ) );
-		RawPokeUInt64( (char*)m_tagData + 8,	RawPeekUInt64( data.GetHash() + 8 ) );
-		m_error = 0;
-		m_dataType = EC_TAGTYPE_HASH16;
-	} else {
-		m_error = 1;
-	}
+	NewData();
+	RawPokeUInt64( m_tagData,		RawPeekUInt64( data.GetHash() ) );
+	RawPokeUInt64( m_tagData + 8,	RawPeekUInt64( data.GetHash() + 8 ) );
+	m_dataType = EC_TAGTYPE_HASH16;
 }
 
 /**
@@ -165,9 +140,9 @@ CECTag::CECTag(ec_tagname_t name, const CMD4Hash& data) : m_tagName(name), m_dyn
  *
  * @see GetStringDataSTL()
  */
-CECTag::CECTag(ec_tagname_t name, const std::string& data) : m_tagName(name), m_dynamic(true), m_haschildren( false )
+CECTag::CECTag(ec_tagname_t name, const std::string& data) : m_tagName(name)
 {
-	ConstructStringTag(name,data);
+	ConstructStringTag(name, data);
 }
 
 /**
@@ -178,7 +153,11 @@ CECTag::CECTag(ec_tagname_t name, const std::string& data) : m_tagName(name), m_
  *
  * @see GetStringData()
  */
-CECTag::CECTag(ec_tagname_t name, const wxString& data) : m_tagName(name), m_dynamic(true), m_haschildren( false )
+CECTag::CECTag(ec_tagname_t name, const wxString& data)
+{
+	ConstructStringTag(name, (const char*)unicode2UTF8(data));
+}
+CECTag::CECTag(ec_tagname_t name, const wxChar* data)
 {
 	ConstructStringTag(name, (const char*)unicode2UTF8(data));
 }
@@ -186,38 +165,10 @@ CECTag::CECTag(ec_tagname_t name, const wxString& data) : m_tagName(name), m_dyn
 /**
  * Copy constructor
  */
-CECTag::CECTag(const CECTag& tag) : m_state( tag.m_state ), m_tagName( tag.m_tagName ), m_dynamic( tag.m_dynamic ), m_haschildren( tag.m_haschildren )
+CECTag::CECTag(const CECTag& tag)
 {
-	m_error = 0;
-	m_dataLen = tag.m_dataLen;
-	m_dataType = tag.m_dataType;
-	if (m_dataLen != 0) {
-		if (m_dynamic) {
-			m_tagData = malloc(m_dataLen);
-			if (m_tagData != NULL) {
-				memcpy((void *)m_tagData, tag.m_tagData, m_dataLen);
-			} else {
-				m_dataLen = 0;
-				m_error = 1;
-				return;
-			}
-		} else {
-			m_tagData = tag.m_tagData;
-		}
-	} else m_tagData = NULL;
-	if (!tag.m_tagList.empty()) {
-		m_tagList.reserve(tag.m_tagList.size());
-		for (TagList::size_type i=0; i<tag.m_tagList.size(); i++) {
-			m_tagList.push_back(tag.m_tagList[i]);
-			if (m_tagList.back().m_error != 0) {
-				m_error = m_tagList.back().m_error;
-#ifndef KEEP_PARTIAL_PACKETS
-				m_tagList.pop_back();
-#endif
-				break;
-			}
-		}
-	}
+	m_tagData = NULL;
+	*this = tag;
 }
 
 /**
@@ -230,19 +181,23 @@ CECTag::CECTag(const CECTag& tag) : m_state( tag.m_state ), m_tagName( tag.m_tag
  *
  * @see GetInt()
  */
-CECTag::CECTag(ec_tagname_t name, uint8 data) : m_tagName(name), m_dynamic(true)
+CECTag::CECTag(ec_tagname_t name, bool data) : m_tagName(name)
 {
 	InitInt(data);
 }
-CECTag::CECTag(ec_tagname_t name, uint16 data) : m_tagName(name), m_dynamic(true)
+CECTag::CECTag(ec_tagname_t name, uint8 data) : m_tagName(name)
 {
 	InitInt(data);
 }
-CECTag::CECTag(ec_tagname_t name, uint32 data) : m_tagName(name), m_dynamic(true)
+CECTag::CECTag(ec_tagname_t name, uint16 data) : m_tagName(name)
 {
 	InitInt(data);
 }
-CECTag::CECTag(ec_tagname_t name, uint64 data) : m_tagName(name), m_dynamic(true)
+CECTag::CECTag(ec_tagname_t name, uint32 data) : m_tagName(name)
+{
+	InitInt(data);
+}
+CECTag::CECTag(ec_tagname_t name, uint64 data) : m_tagName(name)
 {
 	InitInt(data);
 }
@@ -263,32 +218,21 @@ void CECTag::InitInt(uint64 data)
 		m_dataLen = 8;
 	}	
 	
-	m_tagData = malloc(m_dataLen);
+	NewData();
 	
-	if (m_tagData != NULL) {
-		switch (m_dataType) {
-			case EC_TAGTYPE_UINT8:
-				PokeUInt8( (void*)m_tagData, (uint8) data );
-				break;
-			case EC_TAGTYPE_UINT16:
-				PokeUInt16( (void*)m_tagData, wxUINT16_SWAP_ALWAYS((uint16) data ));
-				break;
-			case EC_TAGTYPE_UINT32:
-				PokeUInt32( (void*)m_tagData, wxUINT32_SWAP_ALWAYS((uint32) data ));
-				break;
-			case EC_TAGTYPE_UINT64:
-				PokeUInt64( (void*)m_tagData, wxUINT64_SWAP_ALWAYS(data) );
-				break;
-			default:
-				/* WTF?*/
-				EC_ASSERT(0);
-				free((void*)m_tagData);
-				m_error = 1;
-				return;
-		}
-		m_error = 0;
-	} else {
-		m_error = 1;
+	switch (m_dataType) {
+		case EC_TAGTYPE_UINT8:
+			PokeUInt8( m_tagData, (uint8) data );
+			break;
+		case EC_TAGTYPE_UINT16:
+			PokeUInt16( m_tagData, wxUINT16_SWAP_ALWAYS((uint16) data ));
+			break;
+		case EC_TAGTYPE_UINT32:
+			PokeUInt32( m_tagData, wxUINT32_SWAP_ALWAYS((uint32) data ));
+			break;
+		case EC_TAGTYPE_UINT64:
+			PokeUInt64( m_tagData, wxUINT64_SWAP_ALWAYS(data) );
+			break;
 	}
 }
 
@@ -303,19 +247,16 @@ void CECTag::InitInt(uint64 data)
  *
  * @see GetDoubleData()
  */
-CECTag::CECTag(ec_tagname_t name, double data) : m_tagName(name), m_dynamic(true)
+CECTag::CECTag(ec_tagname_t name, double data) : m_tagName(name)
 {
 	std::ostringstream double_str;
 	double_str << data;
-	m_dataLen = (ec_taglen_t)strlen(double_str.str().c_str()) + 1;
-	m_tagData = malloc(m_dataLen);
-	if (m_tagData != NULL) {
-		memcpy((void *)m_tagData, double_str.str().c_str(), m_dataLen);
-		m_dataType = EC_TAGTYPE_DOUBLE;
-		m_error = 0;
-	} else {
-		m_error = 1;
-	}
+	std::string double_string = double_str.str();
+	const char * double_chr = double_string.c_str();
+	m_dataLen = (ec_taglen_t)strlen(double_chr) + 1;
+	NewData();
+	memcpy(m_tagData, double_chr, m_dataLen);
+	m_dataType = EC_TAGTYPE_DOUBLE;
 }
 
 /**
@@ -323,7 +264,7 @@ CECTag::CECTag(ec_tagname_t name, double data) : m_tagName(name), m_dynamic(true
  */
 CECTag::~CECTag(void)
 {
-	if (m_dynamic) free((void *)m_tagData);
+	delete [] m_tagData;
 }
 
 /**
@@ -333,28 +274,43 @@ CECTag::~CECTag(void)
  * handle m_dynamic and m_tagData.  This wouldn't be necessary if m_tagData
  * was a smart pointer (Hi, Kry!).
  */
-CECTag& CECTag::operator=(const CECTag& rhs)
+CECTag& CECTag::operator=(const CECTag& tag)
 {
-	if (&rhs != this)
-	{
-		// This is a trick to reuse the implementation of the copy constructor
-		// so we don't have to duplicate it here.  temp is constructed as a
-		// copy of rhs, which properly handles m_dynamic and m_tagData.  Then
-		// temp's members are swapped for this object's members.  So,
-		// effectively, this object has been made a copy of rhs, which is the
-		// point.  Then temp is destroyed as it goes out of scope, so its
-		// destructor cleans up whatever data used to belong to this object.
-		CECTag temp(rhs);
-		std::swap(m_error,	temp.m_error);
-		std::swap(m_tagData,	temp.m_tagData);
-		std::swap(m_tagName,	temp.m_tagName);
-		std::swap(m_dataLen,	temp.m_dataLen);
-		std::swap(m_dynamic,	temp.m_dynamic);
-		std::swap(m_tagList,	temp.m_tagList);
-		std::swap(m_state,	temp.m_state);
+	if (&tag != this) {
+		m_tagName = tag.m_tagName;
+		m_dataLen = tag.m_dataLen;
+		m_dataType = tag.m_dataType;
+		delete [] m_tagData;
+		if (m_dataLen != 0) {
+			NewData();
+			memcpy(m_tagData, tag.m_tagData, m_dataLen);
+		} else {
+			m_tagData = NULL;
+		}
+		m_tagList.clear();
+		if (!tag.m_tagList.empty()) {
+			m_tagList.reserve(tag.m_tagList.size());
+			for (TagList::size_type i=0; i<tag.m_tagList.size(); i++) {
+				m_tagList.push_back(tag.m_tagList[i]);
+			}
+		}
 	}
 
 	return *this;
+}
+
+/**
+ * Compare operator.
+ *
+ */
+bool CECTag::operator==(const CECTag& tag) const
+{
+	return	m_dataType == tag.m_dataType
+			&& m_tagName == tag.m_tagName
+			&& m_dataLen == tag.m_dataLen
+			&&	(m_dataLen == 0
+				|| !memcmp(m_tagData, tag.m_tagData, m_dataLen))
+			&& m_tagList == tag.m_tagList;
 }
 
 /**
@@ -397,100 +353,81 @@ CECTag& CECTag::operator=(const CECTag& rhs)
  * \endcode
  *
  * @param tag a CECTag class instance to add.
- * @return \b true on succcess, \b false when an error occured
+ * @return \b true if tag was really added, 
+ * \b false when it was omitted through valuemap.
  */
-bool CECTag::AddTag(const CECTag& tag)
+bool CECTag::AddTag(const CECTag& tag, CValueMap* valuemap)
 {
+	if (valuemap) {
+		return valuemap->AddTag(tag, this);
+	}
 	// cannot have more than 64k tags
 	wxASSERT(m_tagList.size() < 0xffff);
 
 	m_tagList.push_back(tag);
-	if (m_tagList.back().m_error == 0) {
-		return true;
+	return true;
+}
+
+void CECTag::AddTag(ec_tagname_t name, uint64_t data, CValueMap* valuemap)
+{
+	if (valuemap) {
+		valuemap->CreateTag(name, data, this);
 	} else {
-		m_error = m_tagList.back().m_error;
-#ifndef KEEP_PARTIAL_PACKETS
-		m_tagList.pop_back();
-#endif
-		return false;
+		AddTag(CECTag(name, data));
+	}
+}
+
+void CECTag::AddTag(ec_tagname_t name, const wxString& data, CValueMap* valuemap)
+{
+	if (valuemap) {
+		valuemap->CreateTag(name, data, this);
+	} else {
+		AddTag(CECTag(name, data));
+	}
+}
+
+void CECTag::AddTag(ec_tagname_t name, const CMD4Hash& data, CValueMap* valuemap)
+{
+	if (valuemap) {
+		valuemap->CreateTag(name, data, this);
+	} else {
+		AddTag(CECTag(name, data));
 	}
 }
 
 bool CECTag::ReadFromSocket(CECSocket& socket)
 {
-	if (m_state == bsName) {
-		ec_tagname_t tmp_tagName;
-		if (!socket.ReadNumber(&tmp_tagName, sizeof(ec_tagname_t))) {
-			m_tagName = 0;
-			return false;
-		} else {
-			m_tagName = tmp_tagName >> 1;
-			m_haschildren = (tmp_tagName & 0x01) ? true : false;
-			m_state = bsType;
-		}
+	ec_tagname_t tmp_tagName;
+	if (!socket.ReadNumber(&tmp_tagName, sizeof(ec_tagname_t))) {
+		return false;
+	}
+	m_tagName = tmp_tagName >> 1;
+	bool hasChildren = (tmp_tagName & 0x01) != 0;
+	
+	if (!socket.ReadNumber(&m_dataType, sizeof(ec_tagtype_t))) {
+		return false;
 	}
 	
-	if (m_state == bsType) {
-		ec_tagtype_t type;
-		if (!socket.ReadNumber(&type, sizeof(ec_tagtype_t))) {
-			m_dataType = EC_TAGTYPE_UNKNOWN;
-			return false;
-		} else {
-			m_dataType = type;
-			if (m_haschildren) {
-				m_state = bsLengthChld;
-			} else {
-				m_state = bsLength;
-			}
-		}
+	if (!socket.ReadNumber(&m_dataLen, sizeof(ec_taglen_t))) {
+		return false;
+	}
+
+	if (hasChildren && !ReadChildren(socket)) {
+		return false;
 	}
 	
-	if (m_state == bsLength || m_state == bsLengthChld) {
-		ec_taglen_t tagLen;
-		if (!socket.ReadNumber(&tagLen, sizeof(ec_taglen_t))) {
-			return false;
-		} else {
-			m_dataLen = tagLen;
-			if (m_state == bsLength) {
-				m_state = bsData1;
-			} else {
-				m_state = bsChildCnt;
-			}
-		}
-	}
-	
-	if (m_state == bsChildCnt || m_state == bsChildren) {
-		if (!ReadChildren(socket)) {
+	unsigned int tmp_len = m_dataLen;
+	m_dataLen = 0;
+	m_dataLen = tmp_len - GetTagLen();
+	if (m_dataLen > 0) {
+		NewData();
+		if (!socket.ReadBuffer(m_tagData, m_dataLen)) {
 			return false;
 		}
+	} else {
+		m_tagData = NULL;
 	}
-	
-	if (m_state == bsData1) {
-		unsigned int tmp_len = m_dataLen;
-		m_dataLen = 0;
-		m_dataLen = tmp_len - GetTagLen();
-		if (m_dataLen > 0) {
-			m_tagData = malloc(m_dataLen);
-			m_state = bsData2;
-		} else {
-			m_tagData = NULL;
-			m_state = bsFinished;
-		}
-	}
-	
-	if (m_state == bsData2) {
-		if (m_tagData != NULL) {
-			if (!socket.ReadBuffer((void *)m_tagData, m_dataLen)) {
-				return false;
-			} else {
-				m_state = bsFinished;
-			}
-		} else {
-			m_error = 1;
-			return false;
-		}
-	}
-	
+
 	return true;
 }
 
@@ -521,40 +458,21 @@ bool CECTag::WriteTag(CECSocket& socket) const
 
 bool CECTag::ReadChildren(CECSocket& socket)
 {
-	if (m_state == bsChildCnt) {
-		uint16 tmp_tagCount;
-		if (!socket.ReadNumber(&tmp_tagCount, sizeof(uint16))) {
-			return false;
-		} else {
-			m_tagList.clear();
-			if (tmp_tagCount > 0) {
-				m_tagList.reserve(tmp_tagCount);
-				for (int i=0; i<tmp_tagCount; i++) {
-					m_tagList.push_back(CECTag(socket));
-				}
-				m_haschildren = true;
-				m_state = bsChildren;
-			} else {
-				m_state = bsData1;
-			}
-		}
+	uint16 tmp_tagCount;
+	if (!socket.ReadNumber(&tmp_tagCount, sizeof(uint16))) {
+		return false;
 	}
-	
-	if (m_state == bsChildren) {
-		for (unsigned int i=0; i<m_tagList.size(); i++) {
+	m_tagList.clear();
+	if (tmp_tagCount > 0) {
+		m_tagList.reserve(tmp_tagCount);
+		for (int i=0; i<tmp_tagCount; i++) {
+			m_tagList.push_back(CECTag());
 			CECTag& tag = m_tagList[i];
-			if (!tag.IsOk()) {
-				if (!tag.ReadFromSocket(socket)) {
-					if (tag.m_error != 0) {
-						m_error = tag.m_error;
-					}
-					return false;
-				}
+			if (!tag.ReadFromSocket(socket)) {
+				return false;
 			}
 		}
-		m_state = bsData1;
 	}
-	
 	return true;
 }
 
@@ -667,7 +585,7 @@ std::string CECTag::GetStringDataSTL() const
 		return std::string();
 	}
 
-	return std::string((const char*)m_tagData);
+	return std::string(m_tagData);
 }
 
 
@@ -707,9 +625,9 @@ EC_IPv4_t CECTag::GetIPv4Data() const
 {
 	EC_IPv4_t p(0, 0);
 	
-	if (m_tagData == NULL) {
-		EC_ASSERT(false);
-	} else if (m_dataType != EC_TAGTYPE_IPV4) {
+	if (m_dataType != EC_TAGTYPE_IPV4) {
+		EC_ASSERT(m_dataType == EC_TAGTYPE_UNKNOWN);
+	} else if (m_tagData == NULL) {
 		EC_ASSERT(false);
 	} else {
 		RawPokeUInt32( p.m_ip, RawPeekUInt32( ((EC_IPv4_t *)m_tagData)->m_ip ) );
@@ -739,7 +657,7 @@ double CECTag::GetDoubleData(void) const
 		return 0;
 	}
 	
-	std::istringstream double_str((const char*)m_tagData);
+	std::istringstream double_str(m_tagData);
 	
 	double data;
 	double_str >> data;
@@ -747,18 +665,77 @@ double CECTag::GetDoubleData(void) const
 }
 
 
-void CECTag::ConstructStringTag(ec_tagname_t /*name*/, const std::string& data)
+void CECTag::ConstructStringTag(ec_tagname_t name, const std::string& data)
 {
+	m_tagName = name;
 	m_dataLen = (ec_taglen_t)strlen(data.c_str()) + 1;
-	m_tagData = malloc(m_dataLen);
-	if (m_tagData != NULL) {
-		memcpy((void *)m_tagData, data.c_str(), m_dataLen);
-		m_error = 0;
-		m_dataType = EC_TAGTYPE_STRING;
-	} else {
-		m_error = 1;
-	}	
+	NewData();
+	memcpy(m_tagData, data.c_str(), m_dataLen);
+	m_dataType = EC_TAGTYPE_STRING;
 }
+
+void CECTag::SetStringData(const wxString& s)
+{
+	if (IsString()) {
+		delete [] m_tagData;
+		ConstructStringTag(m_tagName, (const char*)unicode2UTF8(s));
+	}
+}
+
+#if	__DEBUG__
+void CECTag::DebugPrint(int level, bool print_empty) const
+{
+	if (m_dataLen || print_empty) {
+		wxString space;
+		for (int i = level; i--;) space += wxT("  ");
+		wxString s1 = CFormat(wxT("%s%s %d = ")) % space % GetDebugNameECTagNames(m_tagName) % m_dataLen;
+		wxString s2;
+		switch (m_tagName) {
+			case EC_TAG_DETAIL_LEVEL:
+				s2 = GetDebugNameEC_DETAIL_LEVEL(GetInt()); break;
+			case EC_TAG_SEARCH_TYPE:
+				s2 = GetDebugNameEC_SEARCH_TYPE(GetInt()); break;
+			case EC_TAG_STAT_VALUE_TYPE:
+				s2 = GetDebugNameEC_STATTREE_NODE_VALUE_TYPE(GetInt()); break;
+			default:
+				switch (m_dataType) {
+					case EC_TAGTYPE_UINT8:
+					case EC_TAGTYPE_UINT16:
+					case EC_TAGTYPE_UINT32:
+					case EC_TAGTYPE_UINT64:
+						s2 = CFormat(wxT("%d")) % GetInt(); break;
+					case EC_TAGTYPE_STRING:
+						s2 = GetStringData(); break;
+					case EC_TAGTYPE_DOUBLE:
+						s2 = CFormat(wxT("%.1f")) % GetDoubleData(); break;
+					case EC_TAGTYPE_HASH16:
+						s2 = GetMD4Data().Encode(); break;
+					case EC_TAGTYPE_CUSTOM:
+						if (m_dataLen == 0) {
+							s2 = wxT("empty");
+						} else {
+							// Make a hex dump (limited to maxOutput)
+							const uint32 maxOutput = 50;
+							for (uint32 i = 0; i < m_dataLen; i++) {
+								if (i == maxOutput) {
+									s2 += wxT("...");
+									break;
+								}
+								s2 += CFormat(wxT("%02X ")) % (unsigned char) m_tagData[i];
+							}
+						}
+						break;
+					default:
+						s2 = GetDebugNameECTagTypes(m_dataType);
+				}
+		}
+		DoECLogLine(s1 + s2);
+	}
+	for (TagList::const_iterator it = m_tagList.begin(); it != m_tagList.end(); ++it) {
+		it->DebugPrint(level + 1, true);
+	}
+}
+#endif
 
 /*!
  * \fn CMD4Hash CECTag::GetMD4Data(void) const
@@ -888,4 +865,7 @@ void CECTag::ConstructStringTag(ec_tagname_t /*name*/, const std::string& data)
  *
  * \sa CECTag(ec_tagname_t, uint64)
  */
+
+uint32 CECID::s_IDCounter = 0;
+
 // File_checked_for_headers

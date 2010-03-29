@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (C) 2005-2009 DÈvai Tam·s ( gonosztopi@amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2005-2008 D√©vai Tam√°s ( gonosztopi@amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -28,25 +28,21 @@
 #include <wx/intl.h>
 #include "OtherFunctions.h"
 
-#ifndef EC_REMOTE
+#ifndef CLIENT_GUI
 
-#ifndef AMULE_DAEMON
 #include <common/Format.h>			// Needed for CFormat
 
 #define a_brackets_b(a,b) (a + wxT(" (") + b + wxT(")"))
 
-#endif /* !AMULE_DAEMON */
-
-#endif /* !EC_REMOTE */
+#endif /* !CLIENT_GUI */
 
 #include <ec/cpp/ECTag.h>			// Needed for CECTag
 
-#ifdef EC_REMOTE
+#ifdef CLIENT_GUI
 	#include <ec/cpp/ECSpecialTags.h>	// Needed for CEC_StatTree_Node_Tag
-#endif
 
+#else
 
-#ifndef EC_REMOTE
 uint32_t NewStatTreeItemId()
 {
 	static uint32_t lastid = 0;
@@ -57,32 +53,28 @@ uint32_t NewStatTreeItemId()
 
 /* CStatTreeItemBase */
 
-#ifdef EC_REMOTE
+#ifdef CLIENT_GUI
 CStatTreeItemBase::CStatTreeItemBase(const CECTag *tag)
 	: m_label(((CEC_StatTree_Node_Tag*)tag)->GetDisplayString())
 	  , m_uniqueid(tag->GetTagByNameSafe(EC_TAG_STATTREE_NODEID)->GetInt())
 {
 	wxASSERT(tag->GetTagName() == EC_TAG_STATTREE_NODE);
 
-	for (int i = 0; i < tag->GetTagCount(); ++i) {
+	for (size_t i = 0; i < tag->GetTagCount(); ++i) {
 		const CECTag *tmp = tag->GetTagByIndex(i);
 		if (tmp->GetTagName() == EC_TAG_STATTREE_NODE) {
 			m_children.push_back(new CStatTreeItemBase(tmp));
 		}
 	}
 }
-#endif /* EC_REMOTE */
+#endif /* CLIENT_GUI */
 
 CStatTreeItemBase::~CStatTreeItemBase()
 {
-	for (std::list<CStatTreeItemBase*>::iterator it = m_children.begin();
-	     it != m_children.end(); ++it) {
-		delete *it;
-	}
-	m_children.clear();
+	DeleteContents(m_children);
 }
 
-#ifndef EC_REMOTE
+#ifndef CLIENT_GUI
 CStatTreeItemBase* CStatTreeItemBase::AddChild(
 	CStatTreeItemBase* child,
 	uint32_t id,
@@ -108,7 +100,7 @@ CStatTreeItemBase* CStatTreeItemBase::AddChild(
 	}
 	return child;
 }
-#endif /* !EC_REMOTE */
+#endif /* !CLIENT_GUI */
 
 bool CStatTreeItemBase::HasVisibleChildren()
 {
@@ -123,7 +115,7 @@ bool CStatTreeItemBase::HasVisibleChildren()
 	return false;
 }
 
-#ifndef EC_REMOTE
+#ifndef CLIENT_GUI
 bool CStatTreeItemBase::HasChildWithId(uint32_t id)
 {
 	wxMutexLocker lock(m_lock);
@@ -149,10 +141,8 @@ CStatTreeItemBase* CStatTreeItemBase::GetChildById(uint32_t id)
 	}
 	return NULL;
 }
-#endif /* !EC_REMOTE */
 
 // Note: these functions do not lock the list, because it is already locked at the time they're called
-#ifndef EC_REMOTE
 StatTreeItemIterator CStatTreeItemBase::GetFirstVisibleChild(uint32_t max_children)
 {
 	StatTreeItemIterator it = m_children.begin();
@@ -174,12 +164,10 @@ void CStatTreeItemBase::GetNextVisibleChild(StatTreeItemIterator& it)
 	if (it != m_children.end()) ++it;
 	while (it != m_children.end() && !(*it)->IsVisible()) ++it;
 }
-#endif
 
 //
 // Anything below is only for core.
 //
-#ifndef EC_REMOTE
 
 bool CStatTreeItemBase::ValueSort(const CStatTreeItemBase* a, const CStatTreeItemBase* b)
 {
@@ -538,39 +526,43 @@ void CStatTreeItemAverageSpeed::AddECValues(CECTag *tag) const
 
 /* CStatTreeItemRatio */
 
-#ifndef AMULE_DAEMON
-wxString CStatTreeItemRatio::GetDisplayString() const
+wxString CStatTreeItemRatio::GetString() const
 {
-	if (m_counter1->GetValue() && m_counter2->GetValue()) {
-		if ((*m_counter2) < (*m_counter1)) {
-			return CFormat(wxGetTranslation(m_label)) %
-				wxString::Format(wxT("%.2f : 1"),
-					(float)(*m_counter1)/(*m_counter2));
+	wxString ret;
+	double v1 = m_counter1->GetValue();
+	double v2 = m_counter2->GetValue();
+	if (v1 > 0 && v2 > 0) {
+		if (v2 < v1) {
+			ret = CFormat(wxT("%.2f : 1")) % (v1 / v2);
 		} else {
-			return CFormat(wxGetTranslation(m_label)) %
-				wxString::Format(wxT("1 : %.2f"),
-					(float)(*m_counter2)/(*m_counter1));
+			ret = CFormat(wxT("1 : %.2f")) % (v2 / v1);
+		}
+
+		if (m_totalfunc1 && m_totalfunc2) {
+			double t1 = m_totalfunc1() + v1;
+			double t2 = m_totalfunc2() + v2;
+			if (t2 < t1) {
+				ret += CFormat(wxT(" (%.2f : 1)")) % (t1 / t2);
+			} else {
+				ret += CFormat(wxT(" (1 : %.2f)")) % (t2 / t1);
+			}
 		}
 	} else {
-		return CFormat(wxGetTranslation(m_label)) % _("Not available");
+		ret = _("Not available");
 	}
+	return ret;
 }
-#endif
+
+#ifndef AMULE_DAEMON
+wxString CStatTreeItemRatio::GetDisplayString() const 
+{ 
+	return CFormat(wxGetTranslation(m_label)) % GetString();
+}
+#endif	
 
 void CStatTreeItemRatio::AddECValues(CECTag *tag) const
 {
-	wxString result;
-	if (m_counter1->GetValue() && m_counter2->GetValue()) {
-		if ((*m_counter2) < (*m_counter1)) {
-			result = wxString::Format(wxT("%.2f : 1"), (float)(*m_counter1)/(*m_counter2));
-		} else {
-			result = wxString::Format(wxT("1 : %.2f"), (float)(*m_counter2)/(*m_counter1));
-		}
-	} else {
-		result = wxTRANSLATE("Not available");
-	}
-
-	CECTag value(EC_TAG_STAT_NODE_VALUE, result);
+	CECTag value(EC_TAG_STAT_NODE_VALUE, GetString());
 	value.AddTag(CECTag(EC_TAG_STAT_VALUE_TYPE, (uint8)EC_VALUE_STRING));
 	tag->AddTag(value);
 }
@@ -645,5 +637,5 @@ void CStatTreeItemTotalClients::AddECValues(CECTag *tag) const
 	tag->AddTag(value2);
 }
 
-#endif /* !EC_REMOTE */
+#endif /* !CLIENT_GUI */
 // File_checked_for_headers

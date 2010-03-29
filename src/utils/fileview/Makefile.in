@@ -47,15 +47,16 @@ am__aclocal_m4_deps = $(top_srcdir)/m4/GeoIP.m4 \
 	$(top_srcdir)/m4/glibc21.m4 $(top_srcdir)/m4/iconv.m4 \
 	$(top_srcdir)/m4/intdiv0.m4 $(top_srcdir)/m4/inttypes-pri.m4 \
 	$(top_srcdir)/m4/inttypes.m4 $(top_srcdir)/m4/inttypes_h.m4 \
-	$(top_srcdir)/m4/lcmessage.m4 $(top_srcdir)/m4/lib-ld.m4 \
-	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
-	$(top_srcdir)/m4/libpng.m4 $(top_srcdir)/m4/libupnp.m4 \
-	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/pkg.m4 \
-	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/m4/readline.m4 \
-	$(top_srcdir)/m4/stdint_h.m4 $(top_srcdir)/m4/uintmax_t.m4 \
-	$(top_srcdir)/m4/ulonglong.m4 $(top_srcdir)/m4/wxwin.m4 \
-	$(top_srcdir)/m4/zlib.m4 $(top_srcdir)/acinclude.m4 \
-	$(top_srcdir)/configure.in
+	$(top_srcdir)/m4/kde.m4 $(top_srcdir)/m4/lcmessage.m4 \
+	$(top_srcdir)/m4/lib-ld.m4 $(top_srcdir)/m4/lib-link.m4 \
+	$(top_srcdir)/m4/lib-prefix.m4 $(top_srcdir)/m4/libpng.m4 \
+	$(top_srcdir)/m4/libupnp.m4 $(top_srcdir)/m4/nls.m4 \
+	$(top_srcdir)/m4/pkg.m4 $(top_srcdir)/m4/plasmamule.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/m4/qt.m4 \
+	$(top_srcdir)/m4/readline.m4 $(top_srcdir)/m4/stdint_h.m4 \
+	$(top_srcdir)/m4/uintmax_t.m4 $(top_srcdir)/m4/ulonglong.m4 \
+	$(top_srcdir)/m4/wxwin.m4 $(top_srcdir)/m4/zlib.m4 \
+	$(top_srcdir)/acinclude.m4 $(top_srcdir)/configure.in
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
@@ -63,8 +64,11 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
 am_mulefileview_OBJECTS = mulefileview-CFile.$(OBJEXT) \
-	mulefileview-SafeFile.$(OBJEXT) mulefileview-Tag.$(OBJEXT) \
-	mulefileview-UInt128.$(OBJEXT) mulefileview-FileView.$(OBJEXT) \
+	mulefileview-SafeFile.$(OBJEXT) \
+	mulefileview-OtherFunctions.$(OBJEXT) \
+	mulefileview-Tag.$(OBJEXT) mulefileview-UInt128.$(OBJEXT) \
+	mulefileview-eD2kFiles.$(OBJEXT) \
+	mulefileview-FileView.$(OBJEXT) \
 	mulefileview-KadFiles.$(OBJEXT) mulefileview-Print.$(OBJEXT)
 mulefileview_OBJECTS = $(am_mulefileview_OBJECTS)
 am__DEPENDENCIES_1 =
@@ -149,11 +153,9 @@ ED2K_FALSE = @ED2K_FALSE@
 ED2K_MANPAGES = @ED2K_MANPAGES@
 ED2K_TRUE = @ED2K_TRUE@
 EGREP = @EGREP@
-ENABLE_IP2COUNTRY_FALSE = @ENABLE_IP2COUNTRY_FALSE@
-ENABLE_IP2COUNTRY_TRUE = @ENABLE_IP2COUNTRY_TRUE@
-ENABLE_UPNP_FALSE = @ENABLE_UPNP_FALSE@
-ENABLE_UPNP_TRUE = @ENABLE_UPNP_TRUE@
 EXEEXT = @EXEEXT@
+FILEVIEW_FALSE = @FILEVIEW_FALSE@
+FILEVIEW_TRUE = @FILEVIEW_TRUE@
 GDLIB_CFLAGS = @GDLIB_CFLAGS@
 GDLIB_CONFIG_PATH = @GDLIB_CONFIG_PATH@
 GDLIB_LDFLAGS = @GDLIB_LDFLAGS@
@@ -178,6 +180,11 @@ INTLBISON = @INTLBISON@
 INTLLIBS = @INTLLIBS@
 INTLOBJS = @INTLOBJS@
 INTL_LIBTOOL_SUFFIX_PREFIX = @INTL_LIBTOOL_SUFFIX_PREFIX@
+KDE4_CONFIG = @KDE4_CONFIG@
+KDE_HEADER_DIR = @KDE_HEADER_DIR@
+KDE_ICON_PATH = @KDE_ICON_PATH@
+KDE_MODULE_PATH = @KDE_MODULE_PATH@
+KDE_SERVICE_PATH = @KDE_SERVICE_PATH@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LEX = @LEX@
@@ -226,13 +233,19 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
+PLASMAMULE_FALSE = @PLASMAMULE_FALSE@
+PLASMAMULE_TRUE = @PLASMAMULE_TRUE@
 POSUB = @POSUB@
 POW_LIB = @POW_LIB@
+QT_CORE_CXXFLAGS = @QT_CORE_CXXFLAGS@
+QT_CORE_LIBS = @QT_CORE_LIBS@
+QT_GUI_CXXFLAGS = @QT_GUI_CXXFLAGS@
+QT_GUI_LIBS = @QT_GUI_LIBS@
+QT_MOC = @QT_MOC@
 RANLIB = @RANLIB@
 RC = @RC@
 RCFLAGS = @RCFLAGS@
 READLINE_LIBS = @READLINE_LIBS@
-REGEX_LIBS = @REGEX_LIBS@
 RESOLV_LIB = @RESOLV_LIB@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -243,8 +256,8 @@ SYS_WIN32_TRUE = @SYS_WIN32_TRUE@
 USE_INCLUDED_LIBINTL = @USE_INCLUDED_LIBINTL@
 USE_NLS = @USE_NLS@
 VERSION = @VERSION@
+WEBSERVER_MANPAGES = @WEBSERVER_MANPAGES@
 WEB_FALSE = @WEB_FALSE@
-WEB_MANPAGES = @WEB_MANPAGES@
 WEB_TRUE = @WEB_TRUE@
 WXBASE_CPPFLAGS = @WXBASE_CPPFLAGS@
 WXBASE_LIBS = @WXBASE_LIBS@
@@ -259,7 +272,6 @@ WX_CXXFLAGS = @WX_CXXFLAGS@
 WX_CXXFLAGS_ONLY = @WX_CXXFLAGS_ONLY@
 WX_DEBUG = @WX_DEBUG@
 WX_LIBS = @WX_LIBS@
-WX_LIBS_STATIC = @WX_LIBS_STATIC@
 WX_PORT = @WX_PORT@
 WX_RESCOMP = @WX_RESCOMP@
 WX_SHARED = @WX_SHARED@
@@ -267,7 +279,8 @@ WX_UNICODE = @WX_UNICODE@
 WX_VERSION_FULL = @WX_VERSION_FULL@
 WX_VERSION_MAJOR = @WX_VERSION_MAJOR@
 WX_VERSION_MINOR = @WX_VERSION_MINOR@
-X11LIBS = @X11LIBS@
+XAS_FALSE = @XAS_FALSE@
+XAS_TRUE = @XAS_TRUE@
 XGETTEXT = @XGETTEXT@
 YACC = @YACC@
 ZLIB_CPPFLAGS = @ZLIB_CPPFLAGS@
@@ -323,8 +336,12 @@ target_alias = @target_alias@
 mulefileview_SOURCES = \
 	../../CFile.cpp \
 	../../SafeFile.cpp \
+	../../OtherFunctions.cpp \
 	../../Tag.cpp \
 	../../kademlia/utils/UInt128.cpp \
+	../../kademlia/kademlia/SearchManager.h \
+	eD2kFiles.h \
+	eD2kFiles.cpp \
 	FileView.cpp \
 	KadFiles.h \
 	KadFiles.cpp \
@@ -385,10 +402,12 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-CFile.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-FileView.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-KadFiles.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-OtherFunctions.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-Print.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-SafeFile.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-Tag.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-UInt128.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mulefileview-eD2kFiles.Po@am__quote@
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	if $(CXXCOMPILE) -MT $@ -MD -MP -MF "$(DEPDIR)/$*.Tpo" -c -o $@ $<; \
@@ -432,6 +451,20 @@ mulefileview-SafeFile.obj: ../../SafeFile.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -c -o mulefileview-SafeFile.obj `if test -f '../../SafeFile.cpp'; then $(CYGPATH_W) '../../SafeFile.cpp'; else $(CYGPATH_W) '$(srcdir)/../../SafeFile.cpp'; fi`
 
+mulefileview-OtherFunctions.o: ../../OtherFunctions.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -MT mulefileview-OtherFunctions.o -MD -MP -MF "$(DEPDIR)/mulefileview-OtherFunctions.Tpo" -c -o mulefileview-OtherFunctions.o `test -f '../../OtherFunctions.cpp' || echo '$(srcdir)/'`../../OtherFunctions.cpp; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/mulefileview-OtherFunctions.Tpo" "$(DEPDIR)/mulefileview-OtherFunctions.Po"; else rm -f "$(DEPDIR)/mulefileview-OtherFunctions.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='../../OtherFunctions.cpp' object='mulefileview-OtherFunctions.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -c -o mulefileview-OtherFunctions.o `test -f '../../OtherFunctions.cpp' || echo '$(srcdir)/'`../../OtherFunctions.cpp
+
+mulefileview-OtherFunctions.obj: ../../OtherFunctions.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -MT mulefileview-OtherFunctions.obj -MD -MP -MF "$(DEPDIR)/mulefileview-OtherFunctions.Tpo" -c -o mulefileview-OtherFunctions.obj `if test -f '../../OtherFunctions.cpp'; then $(CYGPATH_W) '../../OtherFunctions.cpp'; else $(CYGPATH_W) '$(srcdir)/../../OtherFunctions.cpp'; fi`; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/mulefileview-OtherFunctions.Tpo" "$(DEPDIR)/mulefileview-OtherFunctions.Po"; else rm -f "$(DEPDIR)/mulefileview-OtherFunctions.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='../../OtherFunctions.cpp' object='mulefileview-OtherFunctions.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -c -o mulefileview-OtherFunctions.obj `if test -f '../../OtherFunctions.cpp'; then $(CYGPATH_W) '../../OtherFunctions.cpp'; else $(CYGPATH_W) '$(srcdir)/../../OtherFunctions.cpp'; fi`
+
 mulefileview-Tag.o: ../../Tag.cpp
 @am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -MT mulefileview-Tag.o -MD -MP -MF "$(DEPDIR)/mulefileview-Tag.Tpo" -c -o mulefileview-Tag.o `test -f '../../Tag.cpp' || echo '$(srcdir)/'`../../Tag.cpp; \
 @am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/mulefileview-Tag.Tpo" "$(DEPDIR)/mulefileview-Tag.Po"; else rm -f "$(DEPDIR)/mulefileview-Tag.Tpo"; exit 1; fi
@@ -459,6 +492,20 @@ mulefileview-UInt128.obj: ../../kademlia/utils/UInt128.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='../../kademlia/utils/UInt128.cpp' object='mulefileview-UInt128.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -c -o mulefileview-UInt128.obj `if test -f '../../kademlia/utils/UInt128.cpp'; then $(CYGPATH_W) '../../kademlia/utils/UInt128.cpp'; else $(CYGPATH_W) '$(srcdir)/../../kademlia/utils/UInt128.cpp'; fi`
+
+mulefileview-eD2kFiles.o: eD2kFiles.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -MT mulefileview-eD2kFiles.o -MD -MP -MF "$(DEPDIR)/mulefileview-eD2kFiles.Tpo" -c -o mulefileview-eD2kFiles.o `test -f 'eD2kFiles.cpp' || echo '$(srcdir)/'`eD2kFiles.cpp; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/mulefileview-eD2kFiles.Tpo" "$(DEPDIR)/mulefileview-eD2kFiles.Po"; else rm -f "$(DEPDIR)/mulefileview-eD2kFiles.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='eD2kFiles.cpp' object='mulefileview-eD2kFiles.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -c -o mulefileview-eD2kFiles.o `test -f 'eD2kFiles.cpp' || echo '$(srcdir)/'`eD2kFiles.cpp
+
+mulefileview-eD2kFiles.obj: eD2kFiles.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -MT mulefileview-eD2kFiles.obj -MD -MP -MF "$(DEPDIR)/mulefileview-eD2kFiles.Tpo" -c -o mulefileview-eD2kFiles.obj `if test -f 'eD2kFiles.cpp'; then $(CYGPATH_W) 'eD2kFiles.cpp'; else $(CYGPATH_W) '$(srcdir)/eD2kFiles.cpp'; fi`; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/mulefileview-eD2kFiles.Tpo" "$(DEPDIR)/mulefileview-eD2kFiles.Po"; else rm -f "$(DEPDIR)/mulefileview-eD2kFiles.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='eD2kFiles.cpp' object='mulefileview-eD2kFiles.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -c -o mulefileview-eD2kFiles.obj `if test -f 'eD2kFiles.cpp'; then $(CYGPATH_W) 'eD2kFiles.cpp'; else $(CYGPATH_W) '$(srcdir)/eD2kFiles.cpp'; fi`
 
 mulefileview-FileView.o: FileView.cpp
 @am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(mulefileview_CPPFLAGS) $(CPPFLAGS) $(mulefileview_CXXFLAGS) $(CXXFLAGS) -MT mulefileview-FileView.o -MD -MP -MF "$(DEPDIR)/mulefileview-FileView.Tpo" -c -o mulefileview-FileView.o `test -f 'FileView.cpp' || echo '$(srcdir)/'`FileView.cpp; \

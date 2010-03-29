@@ -1,7 +1,7 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -49,7 +49,7 @@ wxString PriorityToStr( int priority, bool isAuto )
 		}
 	}
 
-	wxASSERT( false );
+	wxFAIL;
 
 	return _("Unknown");
 }
@@ -75,7 +75,7 @@ wxString DownloadStateToStr( int state, bool queueFull )
 		case DS_REMOTEQUEUEFULL:	return _("Remote Queue Full");
 	}
 	
-	wxASSERT( false );
+	wxFAIL;
 
 	return _("Unknown");
 }
@@ -132,7 +132,7 @@ wxString OriginToText(unsigned int source_from)
 		case SF_PASSIVE:		return wxTRANSLATE("Passive");
 		case SF_LINK:			return wxTRANSLATE("Link");
 		case SF_SOURCE_SEEDS:		return wxTRANSLATE("Source Seeds");
-		case SF_SEARCH_RESULT:          return wxTRANSLATE("Search Result");
+		case SF_SEARCH_RESULT:		return wxTRANSLATE("Search Result");
 		case SF_NONE:
 		default:		return wxTRANSLATE("Unknown");
 	}

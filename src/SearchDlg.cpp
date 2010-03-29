@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -228,7 +228,7 @@ void CSearchDlg::OnFilterCheckChange(wxCommandEvent& event)
 }
 
 
-void CSearchDlg::OnSearchClosing(wxNotebookEvent& evt) 
+void CSearchDlg::OnSearchClosing(wxBookCtrlEvent& evt) 
 {
 	// Abort global search if it was last tab that was closed.
 	if ( evt.GetSelection() == ((int)m_notebook->GetPageCount() - 1 ) ) {
@@ -249,7 +249,7 @@ void CSearchDlg::OnSearchClosing(wxNotebookEvent& evt)
 }
 
 
-void CSearchDlg::OnSearchPageChanged(wxNotebookEvent& WXUNUSED(evt))
+void CSearchDlg::OnSearchPageChanged(wxBookCtrlEvent& WXUNUSED(evt))
 {
 	int selection = m_notebook->GetSelection();
 
@@ -340,7 +340,7 @@ void CSearchDlg::OnBnClickedStart(wxCommandEvent& WXUNUSED(evt))
 
 		// Error
 		default:
-			wxASSERT(0);
+			wxFAIL;
 	}
 }
 
@@ -435,6 +435,7 @@ void CSearchDlg::CreateNewTab(const wxString& searchString, wxUIntPtr nSearchID)
 void CSearchDlg::OnBnClickedStop(wxCommandEvent& WXUNUSED(evt))
 {
 	theApp->searchlist->StopGlobalSearch();
+	theApp->searchlist->StopKadSearch();
 	ResetControls();
 }
 
@@ -576,7 +577,7 @@ void CSearchDlg::StartNewSearch()
 			break;
 		default:
 			// Should never happen
-			wxASSERT(0);
+			wxFAIL;
 			break;
 	}
 	

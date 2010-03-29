@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2004-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2004-2009 Angel Vidal Veiga ( kry@users.sourceforge.net )
+// Copyright (c) 2004-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2004-2008 Angel Vidal Veiga ( kry@users.sourceforge.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -49,7 +49,6 @@ enum ECSocketErrors {
 	EC_ERROR_WOULDBLOCK,
 	EC_ERROR_TIMEDOUT,
 	EC_ERROR_MEMERR,
-	EC_ERROR_DUMMY,
 	EC_ERROR_UNKNOWN
 };
 
@@ -99,6 +98,8 @@ public:
 
 	void CloseSocket() { InternalClose(); }
 
+	bool HaveNotificationSupport();
+		
 	/**
 	 * Sends an EC packet and returns immediately.
 	 *
@@ -184,9 +185,7 @@ public:
 	/**
 	 * Event handler for connection events.
 	 *
-	 * This function is called when a connection attempt succeeds. When CECSocket
-	 * is compiled with ECSOCKET_USE_EVENTS == 0, WaitOnConnect() should be called
-	 * for this to work.
+	 * This function is called when a connection attempt succeeds.
 	 */
 	virtual void OnConnect();
 
@@ -209,6 +208,7 @@ public:
 	
 	void DestroySocket() { return InternalDestroy(); }
 	
+	bool DataPending();
  private:
 	const CECPacket *ReadPacket();
 	void WritePacket(const CECPacket *packet);
@@ -225,24 +225,26 @@ public:
 
 	size_t	ReadBufferFromSocket(void *buffer, size_t len);
 	void	WriteBufferToSocket(const void *buffer, size_t len);
-
+	
  	/* virtuals */
-		virtual bool InternalConnect(uint32_t ip, uint16_t port, bool wait) = 0;
+	virtual void WriteDoneAndQueueEmpty() = 0;
 	
-		virtual size_t InternalLastCount() = 0;
-		virtual bool InternalWaitOnConnect(long secs = -1, long msecs = 0) = 0;
-		virtual bool InternalWaitForWrite(long secs = -1, long msecs = 0) = 0;
-		virtual bool InternalWaitForRead(long secs = -1, long msecs = 0) = 0;
+	virtual bool InternalConnect(uint32_t ip, uint16_t port, bool wait) = 0;
+
+	virtual size_t InternalLastCount() = 0;
+	virtual bool InternalWaitOnConnect(long secs = -1, long msecs = 0) = 0;
+	virtual bool InternalWaitForWrite(long secs = -1, long msecs = 0) = 0;
+	virtual bool InternalWaitForRead(long secs = -1, long msecs = 0) = 0;
+
+	virtual int InternalGetLastError() = 0;
+
+	virtual void InternalClose() = 0;
+	virtual bool InternalError() = 0;
+	virtual void InternalRead(void* ptr, size_t len) = 0;
+	virtual void InternalWrite(const void* ptr, size_t len) = 0;
 	
-		virtual int InternalGetLastError() = 0;
-	
-		virtual void InternalClose() = 0;
-		virtual bool InternalError() = 0;
-		virtual void InternalRead(void* ptr, size_t len) = 0;
-		virtual void InternalWrite(const void* ptr, size_t len) = 0;
-		
-		virtual bool InternalIsConnected() = 0;
-		virtual void InternalDestroy() = 0;
+	virtual bool InternalIsConnected() = 0;
+	virtual void InternalDestroy() = 0;
 };
 
 

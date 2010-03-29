@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2004-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2004-2009 Angel Vidal Veiga ( kry@users.sourceforge.net )
+// Copyright (c) 2004-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2004-2008 Angel Vidal ( kry@amule.org )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -25,23 +25,22 @@
 
 #include "RemoteConnect.h"
 
+#include <common/MD5Sum.h>
+#include <common/Format.h>
+
 #include <wx/intl.h>
 
 using std::auto_ptr;
 
 DEFINE_LOCAL_EVENT_TYPE(wxEVT_EC_CONNECTION)
 
-CECLoginPacket::CECLoginPacket(const wxString &pass,
-						const wxString& client, const wxString& version) : CECPacket(EC_OP_AUTH_REQ)
+CECLoginPacket::CECLoginPacket(const wxString& client, const wxString& version)
+:
+CECPacket(EC_OP_AUTH_REQ)
 {
 	AddTag(CECTag(EC_TAG_CLIENT_NAME, client));
 	AddTag(CECTag(EC_TAG_CLIENT_VERSION, version));
 	AddTag(CECTag(EC_TAG_PROTOCOL_VERSION, (uint64)EC_CURRENT_PROTOCOL_VERSION));
-
-	CMD4Hash passhash;
-	wxCHECK2(passhash.Decode(pass), /* Do nothing. */);
-	AddTag(CECTag(EC_TAG_PASSWD_HASH, passhash));
-	
 
 	#ifdef EC_VERSION_ID
 	CMD4Hash versionhash;
@@ -49,6 +48,15 @@ CECLoginPacket::CECLoginPacket(const wxString &pass,
 	AddTag(CECTag(EC_TAG_VERSION_ID, versionhash));
 	#endif
 
+}
+
+CECAuthPacket::CECAuthPacket(const wxString& pass)
+:
+CECPacket(EC_OP_AUTH_PASSWD)
+{
+	CMD4Hash passhash;
+	wxCHECK2(passhash.Decode(pass), /* Do nothing. */);
+	AddTag(CECTag(EC_TAG_PASSWD_HASH, passhash));
 }
 
 /*!
@@ -102,9 +110,19 @@ bool CRemoteConnect::ConnectToCore(const wxString &host, int port,
 	addr.Service(port);
 
 	if (ConnectSocket(addr)) {
-		CECLoginPacket login_req(m_connectionPassword, m_client, m_version);
-		std::auto_ptr<const CECPacket> reply(SendRecvPacket(&login_req));
-		return ConnectionEstablished(reply.get());
+		CECLoginPacket login_req(m_client, m_version);
+
+		std::auto_ptr<const CECPacket> getSalt(SendRecvPacket(&login_req));
+		m_ec_state = EC_REQ_SENT;
+
+		ProcessAuthPacket(getSalt.get());
+
+		CECAuthPacket passwdPacket(m_connectionPassword);
+
+		std::auto_ptr<const CECPacket> reply(SendRecvPacket(&passwdPacket));
+		m_ec_state = EC_PASSWD_SENT;
+
+		return ProcessAuthPacket(reply.get());
 	} else if (m_notifier) {
 		m_ec_state = EC_CONNECT_SENT;
 	} else {
@@ -114,10 +132,20 @@ bool CRemoteConnect::ConnectToCore(const wxString &host, int port,
 	return true;
 }
 
+bool CRemoteConnect::IsConnectedToLocalHost()
+{
+	wxIPV4address addr;
+	return GetPeer(addr) ? addr.IsLocalHost() : false;
+}
+
+void CRemoteConnect::WriteDoneAndQueueEmpty()
+{
+}
+
 void CRemoteConnect::OnConnect() {
 	if (m_notifier) {
 		wxASSERT(m_ec_state == EC_CONNECT_SENT);
-		CECLoginPacket login_req(m_connectionPassword, m_client, m_version);
+		CECLoginPacket login_req(m_client, m_version);
 		CECSocket::SendPacket(&login_req);
 		
 		m_ec_state = EC_REQ_SENT;
@@ -138,13 +166,17 @@ const CECPacket *CRemoteConnect::OnPacketReceived(const CECPacket *packet)
 {
 	CECPacket *next_packet = 0;
 	m_req_count--;
+	packet->DebugPrint(true);
 	switch(m_ec_state) {
 		case EC_REQ_SENT:
-			if ( ConnectionEstablished(packet) ) {
-				m_ec_state = EC_OK;
-			} else {
-				m_ec_state = EC_FAIL;
+			if (ProcessAuthPacket(packet)) {
+				CECAuthPacket passwdPacket(m_connectionPassword);
+				CECSocket::SendPacket(&passwdPacket);
+				m_ec_state = EC_PASSWD_SENT;
 			}
+			break;
+		case EC_PASSWD_SENT:
+			ProcessAuthPacket(packet);
 			break;
 		case EC_OK: 
 			if ( !m_req_fifo.empty() ) {
@@ -181,33 +213,44 @@ void CRemoteConnect::SendPacket(CECPacket *request)
 	SendRequest(0, request);
 }
 
-bool CRemoteConnect::ConnectionEstablished(const CECPacket *reply) {
+bool CRemoteConnect::ProcessAuthPacket(const CECPacket *reply) {
 	bool result = false;
 	
 	if (!reply) {
 		m_server_reply = _("EC connection failed. Empty reply.");
 		CloseSocket();
 	} else {
-		if (reply->GetOpCode() == EC_OP_AUTH_FAIL) {
-			const CECTag *reason = reply->GetTagByName(EC_TAG_STRING);
-			if (reason != NULL) {
-				m_server_reply = wxString(_("External Connection: Access denied because: ")) +
-					wxGetTranslation(reason->GetStringData());
-			} else {
-				m_server_reply = _("External Connection: Access denied");
-			}
-			CloseSocket();
-		} else if (reply->GetOpCode() != EC_OP_AUTH_OK) {
-			m_server_reply = _("External Connection: Bad reply from server. Connection closed.");
-			CloseSocket();
-		} else {
+		if ((m_ec_state == EC_REQ_SENT) && (reply->GetOpCode() == EC_OP_AUTH_SALT)) {
+				const CECTag *passwordSalt = reply->GetTagByName(EC_TAG_PASSWD_SALT);
+				if ( NULL != passwordSalt) {
+					wxString saltHash = MD5Sum(CFormat(wxT("%lX")) % passwordSalt->GetInt()).GetHash();
+					m_connectionPassword = MD5Sum(m_connectionPassword.Lower() + saltHash).GetHash();
+					m_ec_state = EC_SALT_RECEIVED;
+					return true;
+				} else {
+					m_server_reply = _("External Connection: Bad reply, handshake failed. Connection closed.");
+					m_ec_state = EC_FAIL;
+					CloseSocket();
+				}
+		} else if ((m_ec_state == EC_PASSWD_SENT) && (reply->GetOpCode() == EC_OP_AUTH_OK)) {
+			m_ec_state = EC_OK;
+			result = true;
 			if (reply->GetTagByName(EC_TAG_SERVER_VERSION)) {
 				m_server_reply = _("Succeeded! Connection established to aMule ") +
 					reply->GetTagByName(EC_TAG_SERVER_VERSION)->GetStringData();
 			} else {
 				m_server_reply = _("Succeeded! Connection established.");
 			}
-			result = true;
+		}else {
+			m_ec_state = EC_FAIL;
+			const CECTag *reason = reply->GetTagByName(EC_TAG_STRING);
+			if (reason != NULL) {
+				m_server_reply = wxString(_("External Connection: Access denied because: ")) +
+					wxGetTranslation(reason->GetStringData());
+			} else {
+				m_server_reply = _("External Connection: Handshake failed.");
+			}
+			CloseSocket();	
 		}
 	}
 	if ( m_notifier ) {

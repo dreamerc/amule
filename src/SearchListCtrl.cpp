@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -27,17 +27,15 @@
 
 #include <common/MenuIDs.h>
 
-#include "amule.h"		// Needed for theApp
-#include "DownloadQueue.h"	// Needed for CDownloadQueue
+#include "amule.h"			// Needed for theApp
 #include "KnownFileList.h"	// Needed for CKnownFileList
-#include "PartFile.h"		// Needed for CPartFile and CKnownFile
 #include "SearchList.h"		// Needed for CSearchFile
 #include "SearchDlg.h"		// Needed for CSearchDlg
 #include "amuleDlg.h"		// Needed for CamuleDlg
 #include "muuli_wdr.h"		// Needed for clientImages
 #include "Preferences.h"	// Needed for thePrefs
 #include "GuiEvents.h"		// Needed for CoreNotify_Search_Add_Download
-
+#include "MuleColour.h"
 
 BEGIN_EVENT_TABLE(CSearchListCtrl, CMuleListCtrl)
 	EVT_LIST_ITEM_RIGHT_CLICK(-1, CSearchListCtrl::OnRightClick)
@@ -63,7 +61,8 @@ enum SearchListColumns {
 	ID_SEARCH_COL_SIZE,
 	ID_SEARCH_COL_SOURCES,
 	ID_SEARCH_COL_TYPE,
-	ID_SEARCH_COL_FILEID
+	ID_SEARCH_COL_FILEID,
+	ID_SEARCH_COL_STATUS
 };
 
 
@@ -84,11 +83,12 @@ m_filterEnabled(false)
 	// Setting the sorter function.
 	SetSortFunc( SortProc );
 
-	InsertColumn( ID_SEARCH_COL_NAME,    _("File Name"), wxLIST_FORMAT_LEFT, 500);
-	InsertColumn( ID_SEARCH_COL_SIZE,    _("Size"),      wxLIST_FORMAT_LEFT, 100);
-	InsertColumn( ID_SEARCH_COL_SOURCES, _("Sources"),   wxLIST_FORMAT_LEFT, 50);
-	InsertColumn( ID_SEARCH_COL_TYPE,    _("Type"),      wxLIST_FORMAT_LEFT, 65);
-	InsertColumn( ID_SEARCH_COL_FILEID,  _("FileID"),    wxLIST_FORMAT_LEFT, 280);
+	InsertColumn( ID_SEARCH_COL_NAME,    _("File Name"), wxLIST_FORMAT_LEFT, 500, wxT("N") );
+	InsertColumn( ID_SEARCH_COL_SIZE,    _("Size"),      wxLIST_FORMAT_LEFT, 100, wxT("Z") );
+	InsertColumn( ID_SEARCH_COL_SOURCES, _("Sources"),   wxLIST_FORMAT_LEFT,  50, wxT("u") );
+	InsertColumn( ID_SEARCH_COL_TYPE,    _("Type"),      wxLIST_FORMAT_LEFT,  65, wxT("Y") );
+	InsertColumn( ID_SEARCH_COL_FILEID,  _("FileID"),    wxLIST_FORMAT_LEFT, 280, wxT("I") );
+	InsertColumn( ID_SEARCH_COL_STATUS,  _("Status"),    wxLIST_FORMAT_LEFT, 100, wxT("S") );
 
 	m_nResultsID = 0;
 
@@ -108,6 +108,12 @@ m_filterEnabled(false)
 
 	// Add the list so that it will be synced with the other lists
 	s_lists.push_back( this );
+}
+
+
+wxString CSearchListCtrl::GetOldColumnOrder() const
+{
+	return wxT("N,Z,u,Y,I,S");
 }
 
 
@@ -196,13 +202,13 @@ void CSearchListCtrl::AddResult(CSearchFile* toshow)
 	SetItem(newid, ID_SEARCH_COL_SIZE, CastItoXBytes( toshow->GetFileSize() ) );
 
 	// Source count
-       wxString temp = wxString::Format(wxT("%d"), toshow->GetSourceCount());
-       if (toshow->GetCompleteSourceCount()) {
-               temp += wxString::Format(wxT(" (%d)"), toshow->GetCompleteSourceCount());
-       }
-       if (toshow->GetClientsCount()) {
-               temp += wxString::Format(wxT(" [%d]"), toshow->GetClientsCount());
-       }
+	wxString temp = wxString::Format(wxT("%d"), toshow->GetSourceCount());
+	if (toshow->GetCompleteSourceCount()) {
+		temp += wxString::Format(wxT(" (%d)"), toshow->GetCompleteSourceCount());
+	}
+	if (toshow->GetClientsCount()) {
+		temp += wxString::Format(wxT(" [%d]"), toshow->GetClientsCount());
+	}
 #ifdef __DEBUG__
 	if (toshow->GetKadPublishInfo() == 0) {
 		temp += wxT(" | -");
@@ -217,6 +223,9 @@ void CSearchListCtrl::AddResult(CSearchFile* toshow)
 
 	// File-hash
 	SetItem(newid, ID_SEARCH_COL_FILEID, toshow->GetFileHash().Encode() );
+
+	// File status
+	SetItem(newid, ID_SEARCH_COL_STATUS, DetermineStatusPrintable(toshow));
 
 	// Set the color of the item
 	UpdateItemColor( newid );
@@ -246,13 +255,13 @@ void CSearchListCtrl::UpdateResult(CSearchFile* toupdate)
 		// Update the filename, which may be changed in case of multiple variants.
 		SetItem(index, ID_SEARCH_COL_NAME, toupdate->GetFileName().GetPrintable());
 
-               wxString temp = wxString::Format(wxT("%d"), toupdate->GetSourceCount());
-               if (toupdate->GetCompleteSourceCount()) {
-                       temp += wxString::Format(wxT(" (%d)"), toupdate->GetCompleteSourceCount());
-               }
-               if (toupdate->GetClientsCount()) {
-                       temp += wxString::Format(wxT(" [%d]"), toupdate->GetClientsCount());
-               }
+		wxString temp = wxString::Format(wxT("%d"), toupdate->GetSourceCount());
+		if (toupdate->GetCompleteSourceCount()) {
+			temp += wxString::Format(wxT(" (%d)"), toupdate->GetCompleteSourceCount());
+		}
+		if (toupdate->GetClientsCount()) {
+			temp += wxString::Format(wxT(" [%d]"), toupdate->GetClientsCount());
+		}
 #ifdef __DEBUG__
 		if (toupdate->GetKadPublishInfo() == 0) {
 			temp += wxT(" | -");
@@ -261,6 +270,8 @@ void CSearchListCtrl::UpdateResult(CSearchFile* toupdate)
 		}
 #endif
 		SetItem(index, ID_SEARCH_COL_SOURCES, temp);
+
+		SetItem(index, ID_SEARCH_COL_STATUS, DetermineStatusPrintable(toupdate));
 
 		UpdateItemColor(index);
 
@@ -281,37 +292,32 @@ void CSearchListCtrl::UpdateItemColor( long index )
 	item.SetMask( wxLIST_MASK_STATE|wxLIST_MASK_TEXT|wxLIST_MASK_IMAGE|wxLIST_MASK_DATA|wxLIST_MASK_WIDTH|wxLIST_MASK_FORMAT );
 
 	if ( GetItem(item) ) {
-		wxColour newcol = SYSCOLOR(wxSYS_COLOUR_WINDOWTEXT);
+		CMuleColour newcol(wxSYS_COLOUR_WINDOWTEXT);
 
 		CSearchFile* file = (CSearchFile*)GetItemData(index);
-		CKnownFile* sameFile = theApp->downloadqueue->GetFileByID(file->GetFileHash());
-		if ( !sameFile ) {
-			sameFile = theApp->knownfiles->FindKnownFileByID(file->GetFileHash());
-		}
 
 		int red		= newcol.Red();
 		int green	= newcol.Green();
 		int blue	= newcol.Blue();
 
-		if ( sameFile ) {
-			if ( sameFile->IsPartFile() ) {
-				// File is already being downloaded. Mark as red.
-				red = 255;
-			} else if ( sameFile->GetStatus() == PS_COMPLETE ) {
-				// File has already been downloaded. Mark as green.
-				green = 200;
-			} else {
-				// File has been cancelled or removed. Mark as grey.
-				red = 128;
-				green = 128;
-				blue = 128;
-			}
-		} else {
-			// File is new, colour after number of files
-			blue += file->GetSourceCount() * 5;
-			if ( blue > 255 ) {
-				blue = 255;
-			}
+		switch (file->GetDownloadStatus()) {
+			case CSearchFile::DOWNLOADED:		// File has already been downloaded. Mark as green.
+												green = 255;
+												break;
+			case CSearchFile::QUEUED:			// File is downloading.
+			case CSearchFile::QUEUEDCANCELED:	// File is downloading and has been canceled before.
+												// Mark as red
+												red = 255;
+												break;
+			case CSearchFile::CANCELED:			// File has been canceled. Mark as magenta.
+												red = 255;
+												blue = 255;
+												break;
+			default:							// File is new, colour after number of files
+												blue += file->GetSourceCount() * 5;
+												if ( blue > 255 ) {
+													blue = 255;
+												}
 		}
 
 		// don't forget to set the item data back...
@@ -319,26 +325,6 @@ void CSearchListCtrl::UpdateItemColor( long index )
 		newitem.SetId( index );
 		newitem.SetTextColour( wxColour( red, green, blue ) );
 		SetItem( newitem );	
-	}
-}
-
-
-// Update the colors of all assosiated items, which means parents and/or siblings.
-void CSearchListCtrl::UpdateAllRelativesColor(
-	CSearchFile *file,
-	long index)
-{
-	if ((file->ShowChildren() && file->HasChildren()) ||
-	    file->GetParent()) {
-		CSearchFile *parent = file->GetParent() ?
-			file->GetParent() : file;
-		const CSearchResultList &list = parent->GetChildren();
-		for (size_t j = 0; j < list.size(); ++j) {
-			UpdateItemColor(FindItem(-1, reinterpret_cast<wxUIntPtr>(list.at(j))));
-		}
-		UpdateItemColor(FindItem(-1, reinterpret_cast<wxUIntPtr>(parent)));
-	} else {		
-		UpdateItemColor(index);
 	}
 }
 
@@ -440,11 +426,7 @@ bool CSearchListCtrl::IsFiltered(const CSearchFile* file)
 		result = ((result && !m_invert) || (!result && m_invert));
 	
 		if (result && m_filterKnown) {
-			result = !theApp->downloadqueue->GetFileByID(file->GetFileHash());
-
-			if (result) {
-				result = !theApp->knownfiles->FindKnownFileByID(file->GetFileHash());
-			}
+			result = file->GetDownloadStatus() == CSearchFile::NEW;
 		}
 	}
 
@@ -530,6 +512,12 @@ int CSearchListCtrl::SortProc(wxUIntPtr item1, wxUIntPtr item2, long sortData)
 		// Sort by file-hash
 		case ID_SEARCH_COL_FILEID:
 			result = CmpAny(file2->GetFileHash(), file1->GetFileHash());
+			break;
+		
+		// Sort by file status
+		case ID_SEARCH_COL_STATUS:
+			result = CmpAny(DetermineStatusPrintable(file2), DetermineStatusPrintable(file1));
+			break;
 	}
 
 	return modifier * result;
@@ -685,7 +673,6 @@ void CSearchListCtrl::OnMarkAsKnown( wxCommandEvent& WXUNUSED(event) )
 		CSearchFile *searchFile = (CSearchFile *)GetItemData(index);
 		CKnownFile *knownFile(new CKnownFile(*searchFile));
 		theApp->knownfiles->SafeAddKFile(knownFile);
-		UpdateAllRelativesColor(searchFile, index);
 		index = GetNextItem(index, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 	}
 #endif
@@ -741,19 +728,20 @@ void CSearchListCtrl::DownloadSelected(int category)
 		}		
 	}
 	
+	// Process all selections
 	long index = GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 	while (index > -1) {
 		CSearchFile* file = (CSearchFile*)GetItemData(index);
 		CoreNotify_Search_Add_Download(file, category);
-		UpdateAllRelativesColor(file, index);
 		index = GetNextItem(index, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 	}
+	// Listcontrol gets updated by notification when download is started
 }
 
 
 const wxBrush& GetBrush(wxSystemColour index)
 {
-	return *wxTheBrushList->FindOrCreateBrush(SYSCOLOR(index));
+	return CMuleColour(index).GetBrush();
 }
 
 
@@ -766,19 +754,19 @@ void CSearchListCtrl::OnDrawItem(
 	if (highlighted) {
 		if (GetFocus()) {
 			dc->SetBackground(GetBrush(wxSYS_COLOUR_HIGHLIGHT));
-			dc->SetTextForeground(SYSCOLOR(wxSYS_COLOUR_HIGHLIGHTTEXT));
+			dc->SetTextForeground(CMuleColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
 		} else {
 			dc->SetBackground(GetBrush(wxSYS_COLOUR_BTNSHADOW));
-			dc->SetTextForeground(SYSCOLOR(wxSYS_COLOUR_HIGHLIGHTTEXT));
+			dc->SetTextForeground(CMuleColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
 		}
 	} else {
 		dc->SetBackground(GetBrush(wxSYS_COLOUR_LISTBOX));
-		dc->SetTextForeground(SYSCOLOR(wxSYS_COLOUR_WINDOWTEXT));
+		dc->SetTextForeground(CMuleColour(wxSYS_COLOUR_WINDOWTEXT));
 	}
 
 	// Define the border of the drawn area
 	if ( highlighted ) {
-		dc->SetPen(wxPen(BLEND(dc->GetBackground().GetColour(), 65)));
+		dc->SetPen(*(wxThePenList->FindOrCreatePen(CMuleColour(dc->GetBackground().GetColour()).Blend(65), 1, wxSOLID)));
 	} else {
 		dc->SetPen(*wxTRANSPARENT_PEN);
 		dc->SetTextForeground(GetItemTextColour(item));
@@ -884,7 +872,7 @@ void CSearchListCtrl::OnDrawItem(
 				// Draw empty circle
 				dc->SetBrush(*wxTRANSPARENT_BRUSH);
 			} else {
-				dc->SetBrush(GetItemTextColour(item));
+				dc->SetBrush(*(wxTheBrushList->FindOrCreateBrush(GetItemTextColour(item))));
 			}
 
 			dc->DrawCircle( treeCenter, middle, 3 );
@@ -947,5 +935,17 @@ void CSearchListCtrl::ShowChildren(CSearchFile* file, bool show)
 wxString CSearchListCtrl::GetTTSText(unsigned item) const
 {
 	return GetItemText(item);
+}
+
+
+wxString CSearchListCtrl::DetermineStatusPrintable(CSearchFile *toshow)
+{
+	switch (toshow->GetDownloadStatus()) {
+		case CSearchFile::DOWNLOADED:		return _("Downloaded");	// File has already been downloaded.
+		case CSearchFile::QUEUED:									// File is downloading.
+		case CSearchFile::QUEUEDCANCELED:	return _("Queued");		// File is downloading and has been canceled before.
+		case CSearchFile::CANCELED:			return _("Canceled");	// File has been canceled.
+		default:							return _("New");		// File is new.
+	}
 }
 // File_checked_for_headers

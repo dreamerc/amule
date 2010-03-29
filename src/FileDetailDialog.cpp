@@ -1,8 +1,8 @@
 //
 // This file is part of the aMule Project.
 //
-// Copyright (c) 2003-2009 aMule Team ( admin@amule.org / http://www.amule.org )
-// Copyright (c) 2002 Merkur ( devs@emule-project.net / http://www.emule-project.net )
+// Copyright (c) 2003-2008 aMule Team ( admin@amule.org / http://www.amule.org )
+// Copyright (c) 2002-2008 Merkur ( devs@emule-project.net / http://www.emule-project.net )
 //
 // Any parts of this program derived from the xMule, lMule or eMule project,
 // or contributed by third-party developers are copyrighted by their
@@ -34,10 +34,10 @@
 #include "CommentDialogLst.h"	// Needed for CCommentDialogLst
 #include "updownclient.h"	// Needed for CUpDownClient
 #include "PartFile.h"		// Needed for CPartFile
-#include "Color.h"		// Needed for SYSCOLOR
 #include "amule.h"		// Needed for theApp
 #include "SharedFileList.h"	// Needed for CSharedFileList
 #include "OtherFunctions.h"
+#include "MuleColour.h"
 
 #define ID_MY_TIMER 1652
 
@@ -136,15 +136,14 @@ void CFileDetailDialog::UpdateData()
 	CastChild(IDC_LASTSEENCOMPL,wxControl)->SetLabel(bufferS);
 	setEnableForApplyButton();
 	// disable "Show all comments" button if there are no comments
-	CastChild(IDC_CMTBT, wxControl)->Enable(!m_file->GetRatingAndComments().empty());
+	FileRatingList list;
+	m_file->GetRatingAndComments(list);
+	CastChild(IDC_CMTBT, wxControl)->Enable(!list.empty());
 	FillSourcenameList();
 	Layout();
 }
 
 // CFileDetailDialog message handlers
-
-#define LVCFMT_LEFT wxLIST_FORMAT_LEFT
-
 
 void CFileDetailDialog::FillSourcenameList()
 {
@@ -161,9 +160,9 @@ void CFileDetailDialog::FillSourcenameList()
 
 	// update
 #ifdef CLIENT_GUI
-	const SourcenameItemList &sources = m_file->GetSourcenameItemList();
-	for (SourcenameItemList::const_iterator it = sources.begin(); it != sources.end(); ++it) {
-		const SourcenameItem &cur_src = *it;
+	const SourcenameItemMap &sources = m_file->GetSourcenameItemMap();
+	for (SourcenameItemMap::const_iterator it = sources.begin(); it != sources.end(); ++it) {
+		const SourcenameItem &cur_src = it->second;
 		itempos = pmyListCtrl->FindItem(-1,cur_src.name);
 		if (itempos == -1) {
 			int itemid = pmyListCtrl->InsertItem(0, cur_src.name);
@@ -172,7 +171,7 @@ void CFileDetailDialog::FillSourcenameList()
 			// background.. argh -- PA: was in old version - do we still need this?
 			wxListItem tmpitem;
 			tmpitem.m_itemId = itemid;
-			tmpitem.SetBackgroundColour(SYSCOLOR(wxSYS_COLOUR_LISTBOX));
+			tmpitem.SetBackgroundColour(CMuleColour(wxSYS_COLOUR_LISTBOX));
 			pmyListCtrl->SetItem(tmpitem);
 			inserted++;
 		} else { 
@@ -198,7 +197,7 @@ void CFileDetailDialog::FillSourcenameList()
 			// background.. argh -- PA: was in old version - do we still need this?
 			wxListItem tmpitem;
 			tmpitem.m_itemId=itemid;
-			tmpitem.SetBackgroundColour(SYSCOLOR(wxSYS_COLOUR_LISTBOX));
+			tmpitem.SetBackgroundColour(CMuleColour(wxSYS_COLOUR_LISTBOX));
 			pmyListCtrl->SetItem(tmpitem);
 			inserted++;
 		} else { 
@@ -251,11 +250,14 @@ void CFileDetailDialog::setValueForFilenameTextEdit(const wxString &s)
 
 void CFileDetailDialog::setEnableForApplyButton()
 {
-	CastChild(IDC_APPLY, wxControl)->Enable(
+	bool enabled = 
 		m_file->IsPartFile() && // Currently renaming of completed files causes problem with kad
 		m_file->GetStatus() != PS_COMPLETE &&
 		m_file->GetStatus() != PS_COMPLETING &&
-		m_filenameChanged);
+		m_filenameChanged;
+	CastChild(IDC_APPLY, wxControl)->Enable(enabled);
+	// Make OK button default so Text can be applied by hitting return
+	CastChild(enabled ? IDC_APPLY_AND_CLOSE : ID_CLOSEWNDFD, wxButton)->SetDefault();
 }
 
 
